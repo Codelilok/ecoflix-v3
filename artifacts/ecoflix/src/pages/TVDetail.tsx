@@ -2,11 +2,60 @@ import { useState } from "react";
 import { useParams, Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { FullPageLoader } from "@/components/ui/spinner";
-import { useDetail, useRecommend } from "@/hooks/use-ecoflix";
+import { useDetail, useRecommend, usePlay } from "@/hooks/use-ecoflix";
 import { useWishlist } from "@/hooks/use-local-state";
 import { ContentRow } from "@/components/ContentRow";
 import { getTitle, getPoster, getYear, getGenres, cn } from "@/lib/utils";
-import { Play, Plus, Check, Star, Calendar, ChevronDown, Tv } from "lucide-react";
+import { Play, Plus, Check, Star, Calendar, Share2, Download, ChevronRight, Tv, User, Film } from "lucide-react";
+
+interface EpisodeActionsProps {
+  showId: string;
+  seasonNumber: number;
+  epNum: number;
+  epTitle: string;
+}
+
+function EpisodeActions({ showId, seasonNumber, epNum, epTitle }: EpisodeActionsProps) {
+  const { data: streamData } = usePlay(showId, 'tv', String(seasonNumber), String(epNum));
+  const streamUrl = streamData?.streams?.[0]?.proxyUrl || streamData?.streams?.[0]?.url;
+  const downloadUrl = streamData?.streams?.[0]?.downloadUrl || streamUrl;
+
+  return (
+    <div className="mt-4 p-4 bg-zinc-800/60 rounded-xl border border-zinc-700">
+      <p className="text-sm font-bold text-white mb-3">
+        Season {seasonNumber} – Episode {epNum}
+        {epTitle !== `Episode ${epNum}` && <span className="text-gray-400 font-normal ml-1">· {epTitle}</span>}
+      </p>
+      <div className="flex gap-3 flex-wrap">
+        <Link href={`/player?id=${showId}&type=tv&season=${seasonNumber}&episode=${epNum}`}>
+          <button className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold text-sm transition-colors shadow-lg">
+            <Play className="h-4 w-4 fill-current" /> Stream
+          </button>
+        </Link>
+        {downloadUrl ? (
+          <a href={downloadUrl} download target="_blank" rel="noopener noreferrer">
+            <button className="flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 text-white px-6 py-3 rounded-lg font-bold text-sm transition-colors">
+              <Download className="h-4 w-4" /> Download
+            </button>
+          </a>
+        ) : (
+          <button disabled className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-700 text-zinc-500 px-6 py-3 rounded-lg font-bold text-sm cursor-not-allowed">
+            <Download className="h-4 w-4" /> Download
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function shareMedia(title: string, id: string) {
+  const url = `${window.location.origin}/tv/${id}`;
+  if (navigator.share) {
+    navigator.share({ title, url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(url).then(() => alert("Link copied to clipboard!")).catch(() => {});
+  }
+}
 
 export default function TVDetail() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +63,7 @@ export default function TVDetail() {
   const { data: recommend } = useRecommend(id);
   const { isInWishlist, toggleWishlist } = useWishlist();
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState<number>(0);
+  const [selectedEpisode, setSelectedEpisode] = useState<{ num: number; title: string } | null>(null);
 
   if (isLoading) return <Layout><FullPageLoader /></Layout>;
 
@@ -33,7 +83,6 @@ export default function TVDetail() {
   const year = getYear(show);
   const genres = getGenres(show);
   const isSaved = isInWishlist(show.subjectId);
-
   const seasons = show.resource || [];
   const currentSeason = seasons[selectedSeasonIdx];
   const seasonNumber = currentSeason?.seasonNumber ?? currentSeason?.season ?? (selectedSeasonIdx + 1);
@@ -72,28 +121,23 @@ export default function TVDetail() {
                 </div>
               )}
 
-              <p className="text-gray-300 max-w-2xl leading-relaxed line-clamp-3">
-                {show.description || "No description available."}
-              </p>
-
-              <div className="flex items-center gap-3 pt-2">
-                <Link href={`/player?id=${show.subjectId}&type=tv&season=${seasonNumber}&episode=1`}>
-                  <button className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded font-bold text-base hover:bg-gray-200 transition-colors shadow-lg">
-                    <Play className="h-5 w-5 fill-current" /> Play S{seasonNumber} E1
-                  </button>
-                </Link>
-
+              <div className="flex items-center gap-3 pt-2 flex-wrap">
                 <button
                   onClick={() => toggleWishlist({ id: show.subjectId, type: 'tv', title, poster })}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-3 rounded font-semibold text-sm border transition-all",
-                    isSaved
-                      ? "bg-green-600/20 border-green-500 text-green-400"
-                      : "bg-zinc-800/80 border-zinc-600 text-white hover:border-white"
+                    "flex items-center gap-2 px-4 py-2.5 rounded font-semibold text-sm border transition-all",
+                    isSaved ? "bg-green-600/20 border-green-500 text-green-400" : "bg-zinc-800/80 border-zinc-600 text-white hover:border-white"
                   )}
                 >
-                  {isSaved ? <Check className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-                  {isSaved ? "In List" : "Add to List"}
+                  {isSaved ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {isSaved ? "In My List" : "Add to List"}
+                </button>
+
+                <button
+                  onClick={() => shareMedia(title, show.subjectId)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded font-semibold text-sm border border-zinc-600 bg-zinc-800/80 text-white hover:border-white transition-all"
+                >
+                  <Share2 className="h-4 w-4" /> Share
                 </button>
               </div>
             </div>
@@ -101,82 +145,150 @@ export default function TVDetail() {
         </div>
       </div>
 
-      <div className="max-w-screen-2xl mx-auto w-full px-6 md:px-14 py-10 space-y-10">
-        {seasons.length > 0 && (
-          <section>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-              <h3 className="text-xl font-bold text-white">Episodes</h3>
-              {seasons.length > 1 && (
-                <div className="relative">
-                  <select
-                    className="appearance-none bg-zinc-800 border border-zinc-600 text-white px-4 py-2 pr-8 rounded focus:outline-none focus:border-red-500"
-                    value={selectedSeasonIdx}
-                    onChange={(e) => setSelectedSeasonIdx(Number(e.target.value))}
-                  >
-                    {seasons.map((s, i) => (
-                      <option key={i} value={i}>
-                        Season {s.seasonNumber ?? s.season ?? (i + 1)} {s.seasonName ? `— ${s.seasonName}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                </div>
-              )}
-            </div>
+      <div className="max-w-screen-2xl mx-auto w-full px-6 md:px-14 py-10 space-y-12">
 
-            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin' }}>
-              {currentSeason?.episodes && currentSeason.episodes.length > 0 ? (
-                currentSeason.episodes.map((ep, epIdx) => {
-                  const epNum = ep.episodeNumber ?? ep.episode ?? (epIdx + 1);
-                  const epTitle = ep.title ?? ep.name ?? `Episode ${epNum}`;
-                  return (
-                    <Link
-                      key={epIdx}
-                      href={`/player?id=${show.subjectId}&type=tv&season=${seasonNumber}&episode=${epNum}`}
-                    >
-                      <div className="flex items-center gap-4 p-4 rounded-lg bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-600 transition-all cursor-pointer group">
-                        <div className="w-10 h-10 rounded bg-zinc-800 flex items-center justify-center flex-shrink-0 group-hover:bg-red-600 transition-colors">
-                          <span className="text-sm font-bold text-gray-400 group-hover:text-white">{epNum}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white truncate group-hover:text-red-400 transition-colors">{epTitle}</p>
-                          {ep.duration && (
-                            <p className="text-xs text-gray-500">{Math.floor(ep.duration / 60)} min</p>
-                          )}
-                        </div>
-                        <Play className="h-5 w-5 text-gray-600 group-hover:text-white transition-colors flex-shrink-0" />
-                      </div>
-                    </Link>
-                  );
-                })
-              ) : (
-                <div className="text-center py-10 text-gray-500 flex flex-col items-center gap-2">
-                  <Tv className="h-8 w-8" />
-                  <p>No episode data available</p>
-                </div>
-              )}
+        <section>
+          <div className="flex items-center gap-3 mb-4">
+            <Film className="h-5 w-5 text-red-500" />
+            <h3 className="text-xl font-bold text-white">Trailer</h3>
+          </div>
+          <div className="rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 aspect-video max-w-3xl">
+            <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 gap-3">
+              <Film className="h-12 w-12" />
+              <p className="text-sm">Trailer not available</p>
             </div>
-          </section>
-        )}
+          </div>
+        </section>
+
+        <section>
+          <h3 className="text-xl font-bold text-white mb-3">Overview</h3>
+          {show.description ? (
+            <p className="text-gray-300 text-base leading-relaxed max-w-3xl">{show.description}</p>
+          ) : (
+            <p className="text-gray-500 text-sm italic">No overview available for this title.</p>
+          )}
+        </section>
 
         {show.stars && show.stars.length > 0 && (
           <section>
-            <h3 className="text-xl font-bold mb-5 text-white">Cast</h3>
-            <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-              {show.stars.slice(0, 12).map((actor, i) => (
-                <div key={i} className="flex flex-col items-center w-20 shrink-0 text-center space-y-2">
-                  <div className="w-16 h-16 rounded-full overflow-hidden bg-zinc-800 border border-zinc-700">
+            <div className="flex items-center gap-3 mb-5">
+              <User className="h-5 w-5 text-red-500" />
+              <h3 className="text-xl font-bold text-white">Cast</h3>
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: 'none' }}>
+              {show.stars.slice(0, 15).map((actor, i) => (
+                <div key={i} className="flex flex-col items-center w-24 shrink-0 text-center space-y-2">
+                  <div className="w-16 h-16 rounded-full overflow-hidden bg-zinc-800 border-2 border-zinc-700">
                     {actor.avatar?.url ? (
-                      <img src={actor.avatar.url} alt={actor.name} className="w-full h-full object-cover" />
+                      <img
+                        src={actor.avatar.url}
+                        alt={actor.name}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.style.display = 'none';
+                          target.parentElement!.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-zinc-700 text-zinc-300 font-bold text-lg">${actor.name?.charAt(0) || '?'}</div>`;
+                        }}
+                      />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                        <Star className="h-5 w-5" />
+                      <div className="w-full h-full flex items-center justify-center bg-zinc-700 text-zinc-300 font-bold text-lg">
+                        {actor.name?.charAt(0) || '?'}
                       </div>
                     )}
                   </div>
                   <p className="text-xs font-medium text-white line-clamp-2">{actor.name}</p>
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {seasons.length > 0 && (
+          <section>
+            <div className="flex items-center gap-3 mb-6">
+              <Tv className="h-5 w-5 text-red-500" />
+              <h3 className="text-xl font-bold text-white">Episodes &amp; Seasons</h3>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="md:w-56 flex-shrink-0">
+                <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-3 px-1">Seasons</p>
+                <div className="space-y-1.5">
+                  {seasons.map((s, i) => {
+                    const sNum = s.seasonNumber ?? s.season ?? (i + 1);
+                    const epCount = s.episodes?.length || 0;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => { setSelectedSeasonIdx(i); setSelectedEpisode(null); }}
+                        className={cn(
+                          "w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-all",
+                          selectedSeasonIdx === i
+                            ? "bg-red-600 text-white"
+                            : "bg-zinc-900/60 text-gray-300 hover:bg-zinc-800 border border-zinc-800"
+                        )}
+                      >
+                        <span>Season {sNum}{s.seasonName ? ` — ${s.seasonName}` : ''}</span>
+                        {epCount > 0 && (
+                          <span className={cn("text-xs font-bold rounded-full px-2 py-0.5", selectedSeasonIdx === i ? "bg-white/20" : "bg-zinc-700 text-zinc-400")}>
+                            {epCount} ep
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-3 px-1">
+                  Season {seasonNumber} Episodes
+                </p>
+                {currentSeason?.episodes && currentSeason.episodes.length > 0 ? (
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+                    {currentSeason.episodes.map((ep, epIdx) => {
+                      const epNum = ep.episodeNumber ?? ep.episode ?? (epIdx + 1);
+                      const epTitle = ep.title ?? ep.name ?? `Episode ${epNum}`;
+                      const isSelected = selectedEpisode?.num === epNum;
+                      return (
+                        <div key={epIdx}>
+                          <button
+                            onClick={() => setSelectedEpisode(isSelected ? null : { num: epNum, title: epTitle })}
+                            className={cn(
+                              "w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left",
+                              isSelected
+                                ? "bg-zinc-800 border-red-600/50"
+                                : "bg-zinc-900/60 border-zinc-800 hover:bg-zinc-800 hover:border-zinc-600"
+                            )}
+                          >
+                            <div className={cn(
+                              "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold transition-colors",
+                              isSelected ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400"
+                            )}>
+                              {epNum}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={cn("text-sm font-medium truncate transition-colors", isSelected ? "text-red-400" : "text-white")}>{epTitle}</p>
+                              {ep.duration && <p className="text-xs text-gray-500">{Math.floor(ep.duration / 60)} min</p>}
+                            </div>
+                            <ChevronRight className={cn("h-4 w-4 flex-shrink-0 transition-transform", isSelected ? "rotate-90 text-red-400" : "text-gray-600")} />
+                          </button>
+
+                          {isSelected && (
+                            <EpisodeActions showId={show.subjectId} seasonNumber={seasonNumber} epNum={epNum} epTitle={epTitle} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-16 text-gray-500 flex flex-col items-center gap-3 bg-zinc-900/40 rounded-xl border border-zinc-800">
+                    <Tv className="h-10 w-10" />
+                    <p>No episode data available for this season</p>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         )}

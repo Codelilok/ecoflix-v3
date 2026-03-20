@@ -13,7 +13,7 @@ export interface ContinueWatchingItem {
   type: 'movie' | 'tv';
   title: string;
   poster?: string;
-  progress: number; // 0 to 100
+  progress: number;
   timestamp: number;
   season?: string;
   episode?: string;
@@ -33,7 +33,7 @@ export function useWishlist() {
   };
 
   const clearWishlist = () => setWishlist([]);
-  
+
   const isInWishlist = (id: string | number) => {
     return wishlist.some(i => String(i.id) === String(id));
   };
@@ -47,11 +47,8 @@ export function useContinueWatching() {
   const saveProgress = (item: Omit<ContinueWatchingItem, 'timestamp'>) => {
     setContinueList(prev => {
       const filtered = prev.filter(i => String(i.id) !== String(item.id));
-      // Only save if progress is meaningful (e.g. > 1% and < 99%)
-      if (item.progress > 98) return filtered; // finished
-      
+      if (item.progress > 98) return filtered;
       const updated = [{ ...item, timestamp: Date.now() }, ...filtered];
-      // Keep only top 20
       return updated.slice(0, 20);
     });
   };
@@ -60,5 +57,11 @@ export function useContinueWatching() {
     return continueList.find(i => String(i.id) === String(id))?.progress || 0;
   };
 
-  return { continueList, saveProgress, getProgress };
+  const removeFromContinueWatching = (id: string | number) => {
+    setContinueList(prev => prev.filter(i => String(i.id) !== String(id)));
+  };
+
+  const clearContinueWatching = () => setContinueList([]);
+
+  return { continueList, saveProgress, getProgress, removeFromContinueWatching, clearContinueWatching };
 }

@@ -111,6 +111,30 @@ export function useBrowse(genre: string, page: number = 1) {
   });
 }
 
+export function useBrowseCategory(genre: string) {
+  return useQuery({
+    queryKey: ["browse-cat", genre],
+    queryFn: async () => {
+      const data = await fetchApi<{ items: MediaItem[] }>(
+        `/browse?genre=${encodeURIComponent(genre)}&page=1`
+      );
+      return data.items || [];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useSearchCategory(keyword: string) {
+  return useQuery({
+    queryKey: ["search-cat", keyword],
+    queryFn: async () => {
+      const data = await fetchApi<{ items: MediaItem[] }>(`/search?keyword=${encodeURIComponent(keyword)}`);
+      return data.items || [];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 export function useRanking(type: "movie" | "tv") {
   return useQuery({
     queryKey: ["ranking", type],
