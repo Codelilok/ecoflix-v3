@@ -17,7 +17,7 @@ export function Layout({ children }: { children: ReactNode }) {
       </motion.main>
 
       <footer className="py-8 text-center text-muted-foreground text-sm border-t border-white/5 mt-auto">
-        <p>© {new Date().getFullYear()} ECOFLIX 3.0</p>
+        <p>© {new Date().getFullYear()} ECOFLIX. Powered by XCASPER API.</p>
       </footer>
     </div>
   );

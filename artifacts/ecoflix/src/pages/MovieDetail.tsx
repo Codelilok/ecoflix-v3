@@ -1,12 +1,13 @@
-import { useState } from "react";
 import { useParams, Link } from "wouter";
+import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { FullPageLoader } from "@/components/ui/spinner";
 import { useDetail, useRecommend, usePlay } from "@/hooks/use-ecoflix";
 import { useWishlist } from "@/hooks/use-local-state";
 import { ContentRow } from "@/components/ContentRow";
+import { CastCard } from "@/components/CastCard";
 import { getTitle, getPoster, getYear, getGenres, cn } from "@/lib/utils";
-import { Play, Plus, Check, Star, Calendar, Globe, Download, Share2, Film, User } from "lucide-react";
+import { Play, Plus, Check, Star, Calendar, Globe, Download, Share2, Film, Users } from "lucide-react";
 
 function shareMedia(title: string, id: string) {
   const url = `${window.location.origin}/movie/${id}`;
@@ -21,9 +22,8 @@ export default function MovieDetail() {
   const { id } = useParams<{ id: string }>();
   const { data: movie, isLoading, error } = useDetail(id);
   const { data: recommend } = useRecommend(id);
-  const { data: streamData } = usePlay(id, 'movie');
+  const { data: streamData, isLoading: streamLoading } = usePlay(id, 'movie');
   const { isInWishlist, toggleWishlist } = useWishlist();
-  const [showStream, setShowStream] = useState(false);
 
   if (isLoading) return <Layout><FullPageLoader /></Layout>;
 
@@ -48,43 +48,47 @@ export default function MovieDetail() {
 
   return (
     <Layout>
-      <div className="relative w-full h-[60vh] md:h-[75vh]">
+      {/* Hero backdrop */}
+      <div className="relative w-full h-[55vh] md:h-[70vh]">
         {poster && <img src={poster} alt={title} className="w-full h-full object-cover object-top" />}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/20" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/75 to-black/10" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
 
-        <div className="absolute bottom-0 left-0 w-full p-6 md:p-14 max-w-screen-2xl">
-          <div className="flex flex-col md:flex-row gap-8 items-end">
-            <div className="hidden md:block w-44 flex-shrink-0 rounded-lg overflow-hidden shadow-2xl border border-white/10">
+        <div className="absolute bottom-0 left-0 w-full px-6 md:px-14 pb-8 max-w-screen-2xl">
+          <div className="flex flex-col md:flex-row gap-6 items-end">
+            <div className="hidden md:block w-40 lg:w-48 flex-shrink-0 rounded-xl overflow-hidden shadow-2xl border border-white/10">
               {poster && <img src={poster} alt={title} className="w-full h-auto" />}
             </div>
-            <div className="flex-1 space-y-3">
-              <h1 className="text-3xl md:text-5xl font-black text-white drop-shadow-lg leading-tight">{title}</h1>
 
-              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-300">
+            <div className="flex-1 min-w-0 space-y-2">
+              <h1 className="text-2xl md:text-4xl lg:text-5xl font-black text-white drop-shadow-lg leading-tight">
+                {title}
+              </h1>
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-300">
                 {movie.imdbRatingValue && (
                   <span className="flex items-center gap-1 text-yellow-400 font-bold">
                     <Star className="h-4 w-4 fill-current" /> {movie.imdbRatingValue} IMDb
                   </span>
                 )}
-                {year && <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> {year}</span>}
-                {movie.countryName && <span className="flex items-center gap-1"><Globe className="h-4 w-4" /> {movie.countryName}</span>}
-                <span className="px-2 py-0.5 border border-gray-600 rounded bg-black/40 text-xs uppercase font-bold tracking-wider">Movie</span>
+                {year && <span className="flex items-center gap-1 text-gray-300"><Calendar className="h-4 w-4" /> {year}</span>}
+                {movie.countryName && <span className="flex items-center gap-1 text-gray-300"><Globe className="h-4 w-4" /> {movie.countryName}</span>}
+                <span className="px-2 py-0.5 border border-gray-600 rounded text-xs uppercase font-bold tracking-wider bg-black/40">Movie</span>
               </div>
 
               {genres.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {genres.map(g => (
                     <span key={g} className="text-xs text-gray-300 bg-zinc-800/80 px-3 py-1 rounded-full border border-zinc-700">{g}</span>
                   ))}
                 </div>
               )}
 
-              <div className="flex items-center gap-3 pt-2 flex-wrap">
+              <div className="flex items-center gap-3 pt-1 flex-wrap">
                 <button
                   onClick={() => toggleWishlist({ id: movie.subjectId, type: 'movie', title, poster })}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 rounded font-semibold text-sm border transition-all",
+                    "flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm border transition-all",
                     isSaved ? "bg-green-600/20 border-green-500 text-green-400" : "bg-zinc-800/80 border-zinc-600 text-white hover:border-white"
                   )}
                 >
@@ -94,7 +98,7 @@ export default function MovieDetail() {
 
                 <button
                   onClick={() => shareMedia(title, movie.subjectId)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded font-semibold text-sm border border-zinc-600 bg-zinc-800/80 text-white hover:border-white transition-all"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm border border-zinc-600 bg-zinc-800/80 text-white hover:border-white transition-all"
                 >
                   <Share2 className="h-4 w-4" /> Share
                 </button>
@@ -104,31 +108,37 @@ export default function MovieDetail() {
         </div>
       </div>
 
-      <div className="max-w-screen-2xl mx-auto w-full px-6 md:px-14 py-10 space-y-12">
+      <div className="max-w-screen-2xl mx-auto w-full px-6 md:px-14 py-8 space-y-10">
 
+        {/* Trailer / Stream */}
         <section>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-2 mb-4">
             <Film className="h-5 w-5 text-red-500" />
             <h3 className="text-xl font-bold text-white">Trailer</h3>
           </div>
-          <div className="rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 aspect-video max-w-3xl">
-            {streamUrl ? (
+          <div className="rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 max-w-3xl" style={{ aspectRatio: '16/9' }}>
+            {streamLoading ? (
+              <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                <div className="animate-spin h-8 w-8 border-2 border-red-500 border-t-transparent rounded-full" />
+              </div>
+            ) : streamUrl ? (
               <video
                 src={streamUrl}
                 controls
                 preload="metadata"
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain bg-black"
                 crossOrigin="anonymous"
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 gap-3">
+              <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 gap-3 p-8">
                 <Film className="h-12 w-12" />
-                <p className="text-sm">Trailer not available</p>
+                <p className="text-sm text-center">Trailer not available for this title</p>
               </div>
             )}
           </div>
         </section>
 
+        {/* Overview */}
         <section>
           <h3 className="text-xl font-bold text-white mb-3">Overview</h3>
           {movie.description ? (
@@ -138,47 +148,32 @@ export default function MovieDetail() {
           )}
         </section>
 
+        {/* Cast */}
         {movie.stars && movie.stars.length > 0 && (
           <section>
-            <div className="flex items-center gap-3 mb-5">
-              <User className="h-5 w-5 text-red-500" />
+            <div className="flex items-center gap-2 mb-5">
+              <Users className="h-5 w-5 text-red-500" />
               <h3 className="text-xl font-bold text-white">Cast</h3>
             </div>
             <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: 'none' }}>
               {movie.stars.slice(0, 15).map((actor, i) => (
-                <div key={i} className="flex flex-col items-center w-24 shrink-0 text-center space-y-2">
-                  <div className="w-16 h-16 rounded-full overflow-hidden bg-zinc-800 border-2 border-zinc-700">
-                    {actor.avatar?.url ? (
-                      <img
-                        src={actor.avatar.url}
-                        alt={actor.name}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          target.style.display = 'none';
-                          target.parentElement!.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-zinc-700 text-zinc-300 font-bold text-lg">${actor.name?.charAt(0) || '?'}</div>`;
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-zinc-700 text-zinc-300 font-bold text-lg">
-                        {actor.name?.charAt(0) || '?'}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs font-medium leading-tight text-white line-clamp-2">{actor.name}</p>
-                  {actor.role && <p className="text-[10px] text-gray-500 line-clamp-1">{actor.role}</p>}
-                </div>
+                <CastCard
+                  key={i}
+                  name={actor.name}
+                  role={actor.role || actor.character}
+                  avatarUrl={actor.avatar?.url}
+                />
               ))}
             </div>
           </section>
         )}
 
-        <section className="bg-zinc-900/60 rounded-2xl border border-zinc-800 p-6 md:p-8">
-          <h3 className="text-xl font-bold text-white mb-6">Watch &amp; Download</h3>
+        {/* Watch & Download */}
+        <section className="bg-zinc-900/70 rounded-2xl border border-zinc-800 p-6 md:p-8">
+          <h3 className="text-xl font-bold text-white mb-5">Watch &amp; Download</h3>
           <div className="flex flex-wrap gap-4">
             <Link href={`/player?id=${movie.subjectId}&type=movie`}>
-              <button className="flex items-center gap-3 bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl font-bold text-base transition-colors shadow-lg shadow-red-600/30 active:scale-95">
+              <button className="flex items-center gap-3 bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl font-bold text-base transition-colors shadow-lg shadow-red-600/20 active:scale-95">
                 <Play className="h-5 w-5 fill-current" />
                 Stream Now
               </button>
@@ -186,16 +181,13 @@ export default function MovieDetail() {
 
             {downloadUrl ? (
               <a href={downloadUrl} download target="_blank" rel="noopener noreferrer">
-                <button className="flex items-center gap-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white px-8 py-4 rounded-xl font-bold text-base transition-colors active:scale-95">
+                <button className="flex items-center gap-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 hover:border-zinc-400 text-white px-8 py-4 rounded-xl font-bold text-base transition-colors active:scale-95">
                   <Download className="h-5 w-5" />
                   Download
                 </button>
               </a>
             ) : (
-              <button
-                disabled
-                className="flex items-center gap-3 bg-zinc-800/50 border border-zinc-700 text-zinc-500 px-8 py-4 rounded-xl font-bold text-base cursor-not-allowed"
-              >
+              <button disabled className="flex items-center gap-3 bg-zinc-800/50 border border-zinc-700 text-zinc-500 px-8 py-4 rounded-xl font-bold text-base cursor-not-allowed">
                 <Download className="h-5 w-5" />
                 Download
               </button>
@@ -204,6 +196,7 @@ export default function MovieDetail() {
           <p className="text-xs text-zinc-500 mt-4">Stream in your browser or download for offline viewing.</p>
         </section>
 
+        {/* Recommendations */}
         {recommend && recommend.length > 0 && (
           <ContentRow title="You May Also Like" items={recommend} />
         )}

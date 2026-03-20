@@ -23,6 +23,7 @@ export function HeroBanner({ items: itemsProp }: HeroBannerProps) {
   const items = itemsProp || [];
   const [current, setCurrent] = useState(0);
   const [animating, setAnimating] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
   const touchStartX = useRef(0);
 
@@ -53,6 +54,8 @@ export function HeroBanner({ items: itemsProp }: HeroBannerProps) {
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
+    setHovered(true);
+    setTimeout(() => setHovered(false), 3000);
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -75,10 +78,13 @@ export function HeroBanner({ items: itemsProp }: HeroBannerProps) {
 
   return (
     <div
-      className="relative h-[80vh] md:h-[90vh] w-full flex items-center justify-start overflow-hidden select-none"
+      className="relative h-[80vh] md:h-[90vh] w-full flex items-end justify-start overflow-hidden select-none group/hero"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Background images */}
       {items.map((it, idx) => {
         const bg = getPoster(it);
         return (
@@ -98,24 +104,25 @@ export function HeroBanner({ items: itemsProp }: HeroBannerProps) {
         );
       })}
 
-      <div className="absolute inset-0 bg-gradient-to-r from-black via-black/70 to-transparent z-10" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent z-10" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-transparent z-10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10" />
 
-      <div className="relative z-20 w-full max-w-screen-2xl mx-auto px-6 md:px-16 pt-24">
-        <div className="max-w-xl">
-          <div className="flex items-center gap-3 mb-3">
+      {/* Content — positioned at bottom-left */}
+      <div className="relative z-20 w-full max-w-screen-2xl mx-auto px-6 md:px-16 pb-16 md:pb-20">
+        <div className="max-w-lg">
+          <div className="flex items-center gap-3 mb-2">
             <span className="text-red-500 font-bold text-sm uppercase tracking-widest">
               {type === 'tv' ? 'TV Series' : 'Movie'}
             </span>
             {year && <span className="text-gray-400 text-sm">{year}</span>}
           </div>
 
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-white mb-4 drop-shadow-2xl leading-tight transition-all duration-500">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-white mb-3 drop-shadow-2xl leading-tight">
             {title}
           </h1>
 
           {genres.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-6">
+            <div className="flex flex-wrap gap-2 mb-5">
               {genres.slice(0, 4).map(g => (
                 <span key={g} className="text-xs text-gray-300 border border-gray-600 px-2 py-1 rounded">
                   {g}
@@ -124,7 +131,7 @@ export function HeroBanner({ items: itemsProp }: HeroBannerProps) {
             </div>
           )}
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link href={detailUrl}>
               <button className="flex items-center gap-2 bg-white text-black px-7 py-3 rounded font-bold text-base md:text-lg hover:bg-gray-200 transition-colors shadow-xl active:scale-95">
                 <Play className="h-5 w-5 fill-current" />
@@ -144,30 +151,32 @@ export function HeroBanner({ items: itemsProp }: HeroBannerProps) {
         </div>
       </div>
 
+      {/* Navigation arrows — far right side, hidden by default, show on hover/tap */}
       {items.length > 1 && (
         <>
           <button
             onClick={() => { clearInterval(intervalRef.current); goPrev(); }}
-            className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 z-30 w-10 h-10 md:w-12 md:h-12 rounded-full bg-black/50 border border-white/20 flex items-center justify-center hover:bg-black/80 transition-colors backdrop-blur-sm"
+            className={`absolute right-16 md:right-20 bottom-8 md:bottom-10 z-30 w-10 h-10 rounded-full bg-black/60 border border-white/30 flex items-center justify-center hover:bg-red-600 hover:border-red-600 transition-all backdrop-blur-sm ${hovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'} duration-300`}
             aria-label="Previous"
           >
-            <ChevronLeft className="h-6 w-6 text-white" />
+            <ChevronLeft className="h-5 w-5 text-white" />
           </button>
 
           <button
             onClick={() => { clearInterval(intervalRef.current); goNext(); }}
-            className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 z-30 w-10 h-10 md:w-12 md:h-12 rounded-full bg-black/50 border border-white/20 flex items-center justify-center hover:bg-black/80 transition-colors backdrop-blur-sm"
+            className={`absolute right-4 md:right-6 bottom-8 md:bottom-10 z-30 w-10 h-10 rounded-full bg-black/60 border border-white/30 flex items-center justify-center hover:bg-red-600 hover:border-red-600 transition-all backdrop-blur-sm ${hovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'} duration-300`}
             aria-label="Next"
           >
-            <ChevronRight className="h-6 w-6 text-white" />
+            <ChevronRight className="h-5 w-5 text-white" />
           </button>
 
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex gap-2">
+          {/* Dot indicators — bottom right, clear of content area */}
+          <div className={`absolute bottom-4 right-6 z-30 flex gap-1.5 transition-opacity duration-300 ${hovered ? 'opacity-100' : 'opacity-60'}`}>
             {items.slice(0, 10).map((_, idx) => (
               <button
                 key={idx}
                 onClick={() => { clearInterval(intervalRef.current); goTo(idx); }}
-                className={`h-1.5 rounded-full transition-all duration-300 ${idx === current ? 'w-8 bg-white' : 'w-2 bg-white/40 hover:bg-white/70'}`}
+                className={`h-1 rounded-full transition-all duration-300 ${idx === current ? 'w-6 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/70'}`}
                 aria-label={`Go to slide ${idx + 1}`}
               />
             ))}

@@ -8,8 +8,8 @@ import { MediaItem } from "@/lib/api-types";
 
 export default function Home() {
   const { data: trending, isLoading: loadTrending } = useTrending();
-  const { data: popularMovies } = useRanking('movie');
-  const { data: popularSeries } = useRanking('tv');
+  const { data: popularMoviesRaw } = useRanking('movie');
+  const { data: popularSeriesRaw } = useRanking('tv');
   const { data: nollywood } = useSearchCategory('Nollywood');
   const { data: anime } = useBrowseCategory('Animation');
   const { data: southAfrican } = useSearchCategory('South African');
@@ -28,6 +28,10 @@ export default function Home() {
   const trendingList: MediaItem[] = trending || [];
   const heroItems = trendingList.slice(0, 10);
 
+  // Filter properly: Popular Movies = subjectType 1 (movies only), Popular Series = subjectType 2 (TV only)
+  const popularMovies = (popularMoviesRaw || []).filter(i => i.subjectType === 1);
+  const popularSeries = (popularSeriesRaw || []).filter(i => i.subjectType === 2);
+
   const continueItems: MediaItem[] = continueList.map(c => ({
     subjectId: String(c.id),
     subjectType: c.type === 'movie' ? 1 : 2,
@@ -44,7 +48,7 @@ export default function Home() {
     <Layout>
       {heroItems.length > 0 && <HeroBanner items={heroItems} />}
 
-      <div className="pb-20 -mt-16 relative z-20 space-y-1">
+      <div className="pb-20 -mt-4 relative z-20 space-y-1">
         {continueItems.length > 0 && (
           <ContentRow
             title="Continue Watching"
@@ -56,68 +60,68 @@ export default function Home() {
 
         <ContentRow
           title="Popular Series"
-          items={popularSeries || []}
-          showMoreHref="/ranking?type=tv"
+          items={popularSeries}
+          showMoreHref="/category/popular-series"
         />
 
         <ContentRow
           title="Popular Movies"
-          items={popularMovies || []}
-          showMoreHref="/ranking?type=movie"
+          items={popularMovies}
+          showMoreHref="/category/popular-movies"
         />
 
         <ContentRow
           title="Nollywood Movies"
           items={nollywood || []}
-          showMoreHref="/browse?genre=Nollywood"
+          showMoreHref="/category/nollywood"
         />
 
         <ContentRow
           title="Anime"
           items={anime || []}
-          showMoreHref="/browse?genre=Animation"
+          showMoreHref="/category/anime"
         />
 
         <ContentRow
           title="South African Drama"
           items={southAfrican || []}
-          showMoreHref="/browse?genre=Drama"
+          showMoreHref="/category/south-african"
         />
 
         <ContentRow
           title="K-Drama"
           items={kdrama || []}
-          showMoreHref="/browse?genre=K-Drama"
+          showMoreHref="/category/kdrama"
         />
 
         <ContentRow
           title="C-Drama"
           items={cdrama || []}
-          showMoreHref="/browse?genre=C-Drama"
+          showMoreHref="/category/cdrama"
         />
 
         <ContentRow
           title="Thai Drama"
           items={thaiDrama || []}
-          showMoreHref="/browse?genre=Thai+Drama"
+          showMoreHref="/category/thai-drama"
         />
 
         <ContentRow
           title="Action Movies"
           items={action || []}
-          showMoreHref="/browse?genre=Action"
+          showMoreHref="/category/action"
         />
 
         <ContentRow
           title="Horror Movies"
           items={horror || []}
-          showMoreHref="/browse?genre=Horror"
+          showMoreHref="/category/horror"
         />
 
         <ContentRow
           title="Teen Romance"
           items={teenRomance || []}
-          showMoreHref="/browse?genre=Romance"
+          showMoreHref="/category/teen-romance"
         />
       </div>
     </Layout>

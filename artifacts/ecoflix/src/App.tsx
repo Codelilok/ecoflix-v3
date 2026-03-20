@@ -3,7 +3,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-// Pages
 import Home from "./pages/Home";
 import Search from "./pages/Search";
 import MovieDetail from "./pages/MovieDetail";
@@ -12,13 +11,14 @@ import Player from "./pages/Player";
 import Browse from "./pages/Browse";
 import Ranking from "./pages/Ranking";
 import Wishlist from "./pages/Wishlist";
+import Category from "./pages/Category";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000, // 5 minutes cache
+      staleTime: 5 * 60 * 1000,
     }
   }
 });
@@ -29,6 +29,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/search" component={Search} />
       <Route path="/browse" component={Browse} />
+      <Route path="/category/:slug" component={Category} />
       <Route path="/ranking" component={Ranking} />
       <Route path="/wishlist" component={Wishlist} />
       <Route path="/movie/:id" component={MovieDetail} />
