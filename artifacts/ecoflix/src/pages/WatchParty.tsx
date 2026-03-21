@@ -7,7 +7,7 @@ import { MediaItem } from "@/lib/api-types";
 import {
   Users, Plus, ArrowRight, Copy, Check, RefreshCw, Play, Pause,
   Volume2, VolumeX, Send, X, ChevronLeft, PartyPopper, Shuffle,
-  SkipForward, Star, Coins, Crown, Tv, ChevronDown, Loader2,
+  SkipForward, Star, Coins, Crown, Tv, ChevronDown, Loader2, List,
 } from "lucide-react";
 
 const API_BASE = "https://movieapi.xcasper.space/api";
@@ -381,7 +381,14 @@ export default function WatchParty() {
   const [subtitleCues, setSubtitleCues] = useState<{ start: number; end: number; text: string }[]>([]);
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
 
+  const [showWatchingEpPicker, setShowWatchingEpPicker] = useState(false);
+  const [wpEpSeasons, setWpEpSeasons] = useState<any[]>([]);
+  const [wpEpLoadingSeasons, setWpEpLoadingSeasons] = useState(false);
+  const [wpSelectedSeason, setWpSelectedSeason] = useState(1);
+  const [wpSelectedEpisode, setWpSelectedEpisode] = useState(1);
+
   const pendingPlayRef = useRef<{ playing: boolean; time: number } | null>(null);
+  const pendingQualityRef = useRef<string | null>(null);
 
   const isHostRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -483,6 +490,33 @@ export default function WatchParty() {
           setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         } else if (msg.type === "typing") {
           setTypingFrom(msg.isTyping ? msg.from : null);
+        } else if (msg.type === "quality_select") {
+          pendingQualityRef.current = msg.label;
+          setAvailableStreams((prev) => {
+            const match = prev.find((s) => s.label === msg.label);
+            if (match) {
+              setCurrentStreamUrl(match.url);
+              setQualityPicked(true);
+              pendingQualityRef.current = null;
+            }
+            return prev;
+          });
+        } else if (msg.type === "episode_changed") {
+          setShowWatchingEpPicker(false);
+          setCurrentStreamUrl("");
+          setAvailableStreams([]);
+          setQualityPicked(false);
+          setSubtitleOptions([]);
+          setActiveSubtitle("off");
+          setSubtitleCues([]);
+          pendingPlayRef.current = null;
+          pendingQualityRef.current = null;
+          if (videoRef.current) {
+            videoRef.current.pause();
+          }
+          setIsPlaying(false);
+          setCurrentTime(0);
+          setDuration(0);
         } else if (msg.type === "member_left") {
           setError("Your party partner left the party.");
         }
@@ -572,9 +606,11 @@ export default function WatchParty() {
   };
 
   const sendPlayback = useCallback(
-    (playing: boolean, time: number) => {
-      if (syncThrottle.current) return;
-      syncThrottle.current = setTimeout(() => { syncThrottle.current = null; }, 500);
+    (playing: boolean, time: number, force = false) => {
+      if (!force && syncThrottle.current) return;
+      if (!force) {
+        syncThrottle.current = setTimeout(() => { syncThrottle.current = null; }, 200);
+      }
       sendWS({ type: "playback", playing, time });
     },
     [sendWS]
@@ -586,11 +622,11 @@ export default function WatchParty() {
     if (video.paused) {
       video.play().catch(() => {});
       setIsPlaying(true);
-      sendPlayback(true, video.currentTime);
+      sendPlayback(true, video.currentTime, true);
     } else {
       video.pause();
       setIsPlaying(false);
-      sendPlayback(false, video.currentTime);
+      sendPlayback(false, video.currentTime, true);
     }
   }, [sendPlayback]);
 
@@ -673,7 +709,7 @@ export default function WatchParty() {
       video.removeEventListener("durationchange", onDuration);
       video.removeEventListener("canplay", onCanPlay);
     };
-  }, [appPhase, partyState, sendWS]);
+  }, [appPhase, partyState, sendWS, currentStreamUrl]);
 
   useEffect(() => {
     return () => {
@@ -715,6 +751,17 @@ export default function WatchParty() {
           setCurrentStreamUrl(options[0]?.url || "");
           setQualityPicked(true);
         } else {
+          const pendingLabel = pendingQualityRef.current;
+          if (pendingLabel) {
+            const match = options.find((o) => o.label === pendingLabel);
+            if (match) {
+              setCurrentStreamUrl(match.url);
+              setQualityPicked(true);
+              pendingQualityRef.current = null;
+              setAvailableStreams(options);
+              return;
+            }
+          }
           setAvailableStreams(options);
         }
         const rawSubs: any[] = json?.data?.subtitles || json?.data?.data?.subtitles || [];
@@ -1166,7 +1213,11 @@ export default function WatchParty() {
                       {availableStreams.map((s, i) => (
                         <button
                           key={i}
-                          onClick={() => { setCurrentStreamUrl(s.url); setQualityPicked(true); }}
+                          onClick={() => {
+                            setCurrentStreamUrl(s.url);
+                            setQualityPicked(true);
+                            sendWS({ type: "quality_select", label: s.label });
+                          }}
                           className="w-full flex items-center justify-between px-5 py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-red-500 rounded-xl transition-colors"
                         >
                           <span className="text-white font-bold text-sm">{s.label}</span>
@@ -1264,6 +1315,32 @@ export default function WatchParty() {
                 </button>
                 <span className="text-white text-sm font-mono">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <div className="flex-1" />
+                {(currentMovie?.type === "tv" || Number(currentMovie?.type) === 2) && (
+                  <button
+                    onClick={() => {
+                      setShowWatchingEpPicker(true);
+                      setWpEpSeasons([]);
+                      setWpEpLoadingSeasons(true);
+                      const movieId = currentMovie?.id;
+                      if (!movieId) { setWpEpLoadingSeasons(false); return; }
+                      fetch(`${API_BASE}/detail?subjectId=${encodeURIComponent(movieId)}`, { headers: API_HEADERS })
+                        .then((r) => r.json())
+                        .then((json) => {
+                          const res = json?.data?.resource;
+                          setWpEpSeasons(Array.isArray(res) ? res : []);
+                          const firstSeason = Array.isArray(res) ? Number(res[0]?.seasonNumber ?? res[0]?.season ?? 1) : 1;
+                          setWpSelectedSeason(firstSeason);
+                          setWpSelectedEpisode(1);
+                        })
+                        .catch(() => setWpEpSeasons([]))
+                        .finally(() => setWpEpLoadingSeasons(false));
+                    }}
+                    className={`p-1.5 rounded transition-colors ${showWatchingEpPicker ? "text-red-400 bg-red-600/10" : "text-gray-400 hover:text-white"}`}
+                    title="Change Episode"
+                  >
+                    <List className="h-5 w-5" />
+                  </button>
+                )}
                 {subtitleOptions.length > 0 && (
                   <button
                     onClick={() => setShowSubtitleMenu((v) => !v)}
@@ -1283,6 +1360,78 @@ export default function WatchParty() {
               </div>
             </div>
           </div>
+
+          {/* Episode picker modal for TV shows in watch party */}
+          {showWatchingEpPicker && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowWatchingEpPicker(false)}>
+              <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-xs mx-4 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800">
+                  <p className="text-white font-bold text-sm">Change Episode</p>
+                  <button onClick={() => setShowWatchingEpPicker(false)} className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center">
+                    <X className="h-4 w-4 text-white" />
+                  </button>
+                </div>
+                <div className="p-4 space-y-4">
+                  {wpEpLoadingSeasons ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="h-7 w-7 animate-spin text-red-500" />
+                    </div>
+                  ) : wpEpSeasons.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-4">No episode data available</p>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider block mb-1.5">Season</label>
+                        <div className="relative">
+                          <select
+                            value={wpSelectedSeason}
+                            onChange={(e) => { setWpSelectedSeason(Number(e.target.value)); setWpSelectedEpisode(1); }}
+                            className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-4 py-2.5 appearance-none focus:outline-none focus:border-red-500 text-sm"
+                          >
+                            {wpEpSeasons.map((s: any, i: number) => {
+                              const sNum = Number(s.seasonNumber || s.season || i + 1);
+                              return <option key={i} value={sNum}>Season {sNum}</option>;
+                            })}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider block mb-1.5">Episode</label>
+                        <div className="relative">
+                          <select
+                            value={wpSelectedEpisode}
+                            onChange={(e) => setWpSelectedEpisode(Number(e.target.value))}
+                            className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-4 py-2.5 appearance-none focus:outline-none focus:border-red-500 text-sm"
+                          >
+                            {(() => {
+                              const season = wpEpSeasons.find((s: any) => Number(s.seasonNumber || s.season) === wpSelectedSeason) || wpEpSeasons[0];
+                              const eps: any[] = season?.episodes || [];
+                              return eps.map((ep: any, i: number) => {
+                                const epNum = Number(ep.episodeNumber || ep.episode || i + 1);
+                                const epTitle = ep.title || ep.name || `Episode ${epNum}`;
+                                return <option key={i} value={epNum}>Ep {epNum} — {epTitle}</option>;
+                              });
+                            })()}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          sendWS({ type: "change_episode", season: wpSelectedSeason, episode: wpSelectedEpisode });
+                          setShowWatchingEpPicker(false);
+                        }}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Check className="h-4 w-4" /> Switch Episode for Everyone
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Chat panel */}
           {showChat && (

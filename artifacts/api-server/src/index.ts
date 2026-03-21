@@ -29,6 +29,9 @@ interface WatchPartyMovie {
   poster: string;
   year?: string;
   rating?: string;
+  season?: string;
+  episode?: string;
+  episodeTitle?: string;
 }
 
 interface PlaybackState {
@@ -219,6 +222,24 @@ wss.on("connection", (ws) => {
         const isHost = party.members[0]?.id === clientId;
         if (!isHost) return;
         broadcastToAll(party, { type: "stream_url", url: msg.url });
+      } else if (msg.type === "quality_select" && currentPartyCode) {
+        const party = parties.get(currentPartyCode);
+        if (!party) return;
+        broadcastExcept(party, { type: "quality_select", label: msg.label }, clientId);
+      } else if (msg.type === "change_episode" && currentPartyCode) {
+        const party = parties.get(currentPartyCode);
+        if (!party) return;
+        const movie = party.movies[party.currentMovieIdx];
+        if (!movie) return;
+        movie.season = String(msg.season);
+        movie.episode = String(msg.episode);
+        party.playbackState = { playing: false, time: 0, updatedAt: Date.now() };
+        broadcastToAll(party, {
+          type: "episode_changed",
+          season: msg.season,
+          episode: msg.episode,
+        });
+        sendPartyState(party);
       } else if (msg.type === "start_watching" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
