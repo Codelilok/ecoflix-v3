@@ -48,19 +48,19 @@ export function ContentRow({ title, items, progressMap = {}, showMoreHref, onRem
           <>
             <button
               onClick={() => scroll('left')}
-              className="absolute left-0 top-0 h-full w-10 md:w-12 z-20 flex items-center justify-center bg-gradient-to-r from-black/80 to-transparent opacity-0 group-hover/row:opacity-100 transition-opacity hover:from-black"
+              className="absolute left-0 top-0 h-full w-10 md:w-12 z-20 flex items-center justify-center bg-gradient-to-r from-black/80 to-transparent md:opacity-0 md:group-hover/row:opacity-100 transition-opacity hover:from-black active:from-black"
               aria-label="Scroll left"
             >
-              <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-sm hover:bg-white/20 transition-colors">
+              <div className="w-8 h-8 rounded-full bg-black/60 border border-white/20 flex items-center justify-center backdrop-blur-sm hover:bg-white/20 active:bg-white/20 transition-colors">
                 <ChevronLeft className="h-4 w-4 text-white" />
               </div>
             </button>
             <button
               onClick={() => scroll('right')}
-              className="absolute right-0 top-0 h-full w-10 md:w-12 z-20 flex items-center justify-center bg-gradient-to-l from-black/80 to-transparent opacity-0 group-hover/row:opacity-100 transition-opacity hover:from-black"
+              className="absolute right-0 top-0 h-full w-10 md:w-12 z-20 flex items-center justify-center bg-gradient-to-l from-black/80 to-transparent md:opacity-0 md:group-hover/row:opacity-100 transition-opacity hover:from-black active:from-black"
               aria-label="Scroll right"
             >
-              <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-sm hover:bg-white/20 transition-colors">
+              <div className="w-8 h-8 rounded-full bg-black/60 border border-white/20 flex items-center justify-center backdrop-blur-sm hover:bg-white/20 active:bg-white/20 transition-colors">
                 <ChevronRight className="h-4 w-4 text-white" />
               </div>
             </button>

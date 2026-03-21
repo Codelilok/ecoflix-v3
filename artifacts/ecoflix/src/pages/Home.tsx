@@ -28,9 +28,11 @@ export default function Home() {
   const trendingList: MediaItem[] = trending || [];
   const heroItems = trendingList.slice(0, 10);
 
-  // Filter properly: Popular Movies = subjectType 1 (movies only), Popular Series = subjectType 2 (TV only)
   const popularMovies = (popularMoviesRaw || []).filter(i => i.subjectType === 1);
-  const popularSeries = (popularSeriesRaw || []).filter(i => i.subjectType === 2);
+  // Popular Series: use TV ranking, prefer subjectType 2, fall back to trending TV items
+  const seriesFromRanking = (popularSeriesRaw || []).filter(i => i.subjectType === 2);
+  const seriesFromTrending = (trending || []).filter(i => i.subjectType === 2);
+  const popularSeries = seriesFromRanking.length > 0 ? seriesFromRanking : seriesFromTrending;
 
   const continueItems: MediaItem[] = continueList.map(c => ({
     subjectId: String(c.id),

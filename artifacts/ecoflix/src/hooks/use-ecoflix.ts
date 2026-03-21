@@ -75,14 +75,16 @@ export function useDetail(subjectId: string) {
 }
 
 export function usePlay(subjectId: string, type: 'movie' | 'tv', season?: string, episode?: string) {
-  const query = new URLSearchParams({ subjectId, type });
-  if (season) query.append("season", season);
-  if (episode) query.append("episode", episode);
+  const isTvEpisode = type === 'tv' && season && episode;
+
+  const queryString = isTvEpisode
+    ? `subjectId=${encodeURIComponent(subjectId)}&se=${encodeURIComponent(season!)}&ep=${encodeURIComponent(episode!)}`
+    : `subjectId=${encodeURIComponent(subjectId)}`;
 
   return useQuery({
     queryKey: ["play", subjectId, type, season, episode],
-    queryFn: () => fetchApi<PlayResponse>(`/play?${query.toString()}`),
-    enabled: !!subjectId && !!type,
+    queryFn: () => fetchApi<PlayResponse>(`/play?${queryString}`),
+    enabled: !!subjectId,
     retry: 1,
     staleTime: 30 * 60 * 1000,
   });
