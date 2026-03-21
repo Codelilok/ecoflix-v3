@@ -16,6 +16,37 @@ const API_HEADERS = {
   "Accept": "application/json",
 };
 
+function parseTimestamp(ts: string): number {
+  const clean = ts.trim().replace(",", ".");
+  const parts = clean.split(":");
+  if (parts.length === 3) return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+  return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+}
+
+function parseVTT(text: string): { start: number; end: number; text: string }[] {
+  const cues: { start: number; end: number; text: string }[] = [];
+  const lines = text.split(/\r?\n/);
+  let i = 0;
+  while (i < lines.length) {
+    if (lines[i].includes("-->")) {
+      const [startRaw, endRaw] = lines[i].split("-->").map((s) => s.trim().split(" ")[0]);
+      const start = parseTimestamp(startRaw);
+      const end = parseTimestamp(endRaw);
+      i++;
+      const textLines: string[] = [];
+      while (i < lines.length && lines[i].trim() !== "") {
+        const stripped = lines[i].replace(/<[^>]+>/g, "").trim();
+        if (stripped) textLines.push(stripped);
+        i++;
+      }
+      if (textLines.length > 0) cues.push({ start, end, text: textLines.join("\n") });
+    } else { i++; }
+  }
+  return cues;
+}
+
+interface SubtitleOption { label: string; url: string; }
+
 /* ─── Types ─── */
 interface WatchPartyMovie {
   id: string;
@@ -122,10 +153,10 @@ function WatchPartyEpisodePicker({
     fetch(`${API_BASE}/detail?subjectId=${encodeURIComponent(item.subjectId)}`, { headers: API_HEADERS })
       .then((r) => r.json())
       .then((json) => {
-        const d = json?.data?.subject || json?.data || null;
-        const resource = json?.data?.resource || [];
-        setDetail({ ...d, resource });
-        const firstSeason = resource[0]?.seasonNumber || resource[0]?.season || 1;
+        const rawResource = json?.data?.resource;
+        const resource = Array.isArray(rawResource) ? rawResource : [];
+        setDetail({ resource });
+        const firstSeason = resource[0]?.seasonNumber ?? resource[0]?.season ?? 1;
         setSelectedSeason(Number(firstSeason));
         setSelectedEpisode(1);
       })
@@ -133,10 +164,10 @@ function WatchPartyEpisodePicker({
       .finally(() => setLoading(false));
   }, [item.subjectId]);
 
-  const seasons: any[] = detail?.resource || [];
+  const seasons: any[] = Array.isArray(detail?.resource) ? detail.resource : [];
   const currentSeason = seasons.find(
-    (s) => Number(s.seasonNumber || s.season) === selectedSeason
-  ) || seasons[0];
+    (s: any) => Number(s.seasonNumber ?? s.season) === selectedSeason
+  ) ?? seasons[0];
   const episodes: any[] = currentSeason?.episodes || [];
 
   const handleConfirm = () => {
@@ -345,6 +376,10 @@ export default function WatchParty() {
   const [availableStreams, setAvailableStreams] = useState<StreamOption[]>([]);
   const [qualityPicked, setQualityPicked] = useState(false);
   const [episodePickerItem, setEpisodePickerItem] = useState<MediaItem | null>(null);
+  const [subtitleOptions, setSubtitleOptions] = useState<SubtitleOption[]>([]);
+  const [activeSubtitle, setActiveSubtitle] = useState<string>("off");
+  const [subtitleCues, setSubtitleCues] = useState<{ start: number; end: number; text: string }[]>([]);
+  const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
 
   const pendingPlayRef = useRef<{ playing: boolean; time: number } | null>(null);
 
@@ -657,6 +692,9 @@ export default function WatchParty() {
     setAvailableStreams([]);
     setQualityPicked(false);
     setStreamLoading(true);
+    setSubtitleOptions([]);
+    setActiveSubtitle("off");
+    setSubtitleCues([]);
     pendingPlayRef.current = null;
     const isTv = currentMovieForFetch.type === "tv" || Number(currentMovieForFetch.type) === 2;
     const qs = isTv && currentMovieForFetch.season && currentMovieForFetch.episode
@@ -668,7 +706,7 @@ export default function WatchParty() {
         const streams: any[] = json?.data?.streams || [];
         if (streams.length === 0) { setCurrentStreamUrl(""); return; }
         const options: StreamOption[] = streams
-          .map((s, i) => ({
+          .map((s: any, i: number) => ({
             url: s.proxyUrl || s.url || "",
             label: s.resolutions ? `${s.resolutions}p` : s.format ? s.format.toUpperCase() : `Quality ${i + 1}`,
           }))
@@ -679,10 +717,25 @@ export default function WatchParty() {
         } else {
           setAvailableStreams(options);
         }
+        const rawSubs: any[] = json?.data?.subtitles || json?.data?.data?.subtitles || [];
+        const subs: SubtitleOption[] = rawSubs
+          .map((s: any) => ({ label: s.label || s.language || s.lang || "Subtitle", url: s.url || s.src || "" }))
+          .filter((s) => s.url);
+        setSubtitleOptions(subs);
       })
       .catch(() => setCurrentStreamUrl(""))
       .finally(() => setStreamLoading(false));
   }, [currentMovieForFetch?.id, currentMovieForFetch?.season, currentMovieForFetch?.episode, appPhase]);
+
+  useEffect(() => {
+    if (activeSubtitle === "off") { setSubtitleCues([]); return; }
+    const sub = subtitleOptions.find((s) => s.label === activeSubtitle);
+    if (!sub) return;
+    fetch(sub.url)
+      .then((r) => r.text())
+      .then((text) => setSubtitleCues(parseVTT(text)))
+      .catch(() => setSubtitleCues([]));
+  }, [activeSubtitle, subtitleOptions]);
 
   const currentMovie = partyState?.movies?.[partyState?.currentMovieIdx || 0];
   const members = partyState?.members || [];
@@ -1151,6 +1204,46 @@ export default function WatchParty() {
                   <span className="text-xs text-gray-300">Syncing...</span>
                 </div>
               )}
+
+              {/* Subtitle overlay */}
+              {(() => {
+                const cue = subtitleCues.find((c) => currentTime >= c.start && currentTime <= c.end);
+                return cue ? (
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none px-4">
+                    <div className="bg-black/75 rounded-lg px-3 py-1.5 max-w-[90%] text-center">
+                      {cue.text.split("\n").map((line, i) => (
+                        <p key={i} className="text-white text-sm font-medium leading-snug drop-shadow">{line}</p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Subtitle menu */}
+              {showSubtitleMenu && (
+                <div className="absolute bottom-16 right-4 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden z-20 min-w-[160px]">
+                  <div className="px-3 py-2 border-b border-zinc-800">
+                    <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Subtitles</p>
+                  </div>
+                  <button
+                    onClick={() => { setActiveSubtitle("off"); setShowSubtitleMenu(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 hover:bg-zinc-800 transition-colors ${activeSubtitle === "off" ? "text-red-400 font-semibold" : "text-gray-300"}`}
+                  >
+                    {activeSubtitle === "off" && <Check className="h-3.5 w-3.5" />}
+                    <span className={activeSubtitle === "off" ? "" : "ml-5"}>Off</span>
+                  </button>
+                  {subtitleOptions.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setActiveSubtitle(s.label); setShowSubtitleMenu(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 hover:bg-zinc-800 transition-colors ${activeSubtitle === s.label ? "text-red-400 font-semibold" : "text-gray-300"}`}
+                    >
+                      {activeSubtitle === s.label && <Check className="h-3.5 w-3.5" />}
+                      <span className={activeSubtitle === s.label ? "" : "ml-5"}>{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Controls */}
@@ -1171,6 +1264,14 @@ export default function WatchParty() {
                 </button>
                 <span className="text-white text-sm font-mono">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <div className="flex-1" />
+                {subtitleOptions.length > 0 && (
+                  <button
+                    onClick={() => setShowSubtitleMenu((v) => !v)}
+                    className={`text-sm font-bold px-2 py-1 rounded transition-colors ${activeSubtitle !== "off" ? "text-red-400 bg-red-600/10" : "text-gray-400 hover:text-white"}`}
+                  >
+                    CC
+                  </button>
+                )}
                 <button onClick={() => {
                   if (videoRef.current) {
                     videoRef.current.muted = !videoRef.current.muted;

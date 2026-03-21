@@ -102,6 +102,9 @@ export default function Player() {
   const [expandedSeason, setExpandedSeason] = useState<number | null>(0);
   const [manualSeason, setManualSeason] = useState(Number(season) || 1);
   const [manualEp, setManualEp] = useState(Number(episode) || 1);
+  const [epPickerModal, setEpPickerModal] = useState<{ season: number; ep: number } | null>(null);
+  const [epPickerStreams, setEpPickerStreams] = useState<Stream[]>([]);
+  const [epPickerLoading, setEpPickerLoading] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -330,10 +333,35 @@ export default function Player() {
 
   const streamEpisode = useCallback((seasonNum: number, epNum: number, stream?: Stream) => {
     setShowEpisodes(false);
+    setEpPickerModal(null);
     historyLoggedRef.current = false;
     const streamParam = stream ? `&streamUrl=${encodeURIComponent(stream.proxyUrl || stream.url)}` : "";
     setLocation(`/player?id=${id}&type=tv&season=${seasonNum}&episode=${epNum}${streamParam}`);
   }, [id, setLocation]);
+
+  const handleEpisodeClick = useCallback((seasonNum: number, epNum: number) => {
+    setEpPickerModal({ season: seasonNum, ep: epNum });
+    setEpPickerStreams([]);
+    setEpPickerLoading(true);
+    const qs = `subjectId=${encodeURIComponent(id!)}&se=${encodeURIComponent(seasonNum)}&ep=${encodeURIComponent(epNum)}`;
+    fetch(`https://movieapi.xcasper.space/api/play?${qs}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+      }
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        const streams: Stream[] = json?.data?.streams || [];
+        if (streams.length <= 1) {
+          streamEpisode(seasonNum, epNum, streams[0]);
+        } else {
+          setEpPickerStreams(streams);
+        }
+      })
+      .catch(() => streamEpisode(seasonNum, epNum))
+      .finally(() => setEpPickerLoading(false));
+  }, [id, streamEpisode]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (showEpisodes) return;
@@ -714,7 +742,7 @@ export default function Player() {
 
                   <button
                     onClick={() => {
-                      streamEpisode(manualSeason, manualEp);
+                      handleEpisodeClick(manualSeason, manualEp);
                     }}
                     className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-xl font-bold text-sm transition-colors w-full justify-center"
                   >
@@ -757,7 +785,7 @@ export default function Player() {
                             return (
                               <button
                                 key={epIdx}
-                                onClick={() => !isCurrent && streamEpisode(sNum, epNum)}
+                                onClick={() => !isCurrent && handleEpisodeClick(sNum, epNum)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors group ${isCurrent ? "bg-red-600/10 border-l-2 border-red-500" : "hover:bg-zinc-800/60"}`}
                               >
                                 <div className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 group-hover:text-red-400"}`}>
@@ -782,6 +810,49 @@ export default function Player() {
                     </div>
                   );
                 })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Episode quality picker modal */}
+      {epPickerModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={() => setEpPickerModal(null)}>
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+              <div>
+                <p className="text-white font-bold text-base">Choose Quality</p>
+                <p className="text-gray-400 text-xs mt-0.5">S{epPickerModal.season} · E{epPickerModal.ep}</p>
+              </div>
+              <button onClick={() => setEpPickerModal(null)} className="text-gray-500 hover:text-white p-1">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-4">
+              {epPickerLoading ? (
+                <div className="flex flex-col items-center gap-3 py-6">
+                  <Loader2 className="h-7 w-7 animate-spin text-red-500" />
+                  <p className="text-gray-400 text-sm">Loading streams...</p>
+                </div>
+              ) : epPickerStreams.length === 0 ? (
+                <div className="py-6 text-center text-gray-500 text-sm">No streams found</div>
+              ) : (
+                <div className="space-y-2">
+                  {epPickerStreams.map((s, i) => {
+                    const label = s.resolutions ? `${s.resolutions}p` : s.format ? s.format.toUpperCase() : `Quality ${i + 1}`;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => streamEpisode(epPickerModal.season, epPickerModal.ep, s)}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-zinc-800 hover:bg-red-600/20 hover:border-red-500/40 border border-zinc-700 rounded-xl transition-all group"
+                      >
+                        <span className="text-white font-semibold text-sm group-hover:text-red-300">{label}</span>
+                        <Play className="h-4 w-4 text-gray-500 group-hover:text-red-400 fill-current" />
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
