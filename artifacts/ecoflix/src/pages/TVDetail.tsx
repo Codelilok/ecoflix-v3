@@ -10,7 +10,7 @@ import { QualityModal } from "@/components/QualityModal";
 import { getTitle, getPoster, getYear, getGenres, cn } from "@/lib/utils";
 import {
   Play, Plus, Check, Star, Calendar, Share2, Download,
-  ChevronDown, Tv, Users, ArrowLeft, X, Loader2,
+  ChevronDown, Tv, Users, ArrowLeft, X, Loader2, Minus,
 } from "lucide-react";
 import { Stream, EpisodeItem } from "@/lib/api-types";
 
@@ -67,10 +67,7 @@ function EpisodeModal({ isOpen, onClose, showId, showTitle, seasonNumber, epNum,
                 {epTitle !== `Episode ${epNum}` ? epTitle : showTitle}
               </h3>
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition-colors ml-3 flex-shrink-0"
-            >
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition-colors ml-3 flex-shrink-0">
               <X className="h-4 w-4 text-white" />
             </button>
           </div>
@@ -139,51 +136,68 @@ function EpisodeModal({ isOpen, onClose, showId, showTitle, seasonNumber, epNum,
   );
 }
 
-/* ─── DirectStreamButton ─── fallback when no seasons data ─── */
+/* ─── ManualEpisodePicker ─── shown when API returns no season data ─── */
 
-function DirectStreamButton({ showId, showTitle }: { showId: string; showTitle: string }) {
-  const [, setLocation] = useLocation();
-  const { data: streamData, isLoading } = usePlay(showId, "tv");
-  const [showQuality, setShowQuality] = useState(false);
-  const streams: Stream[] = streamData?.streams || [];
-
-  const handleStreamSelect = (stream: Stream) => {
-    const url = stream.proxyUrl || stream.url;
-    setLocation(`/player?id=${showId}&type=tv&streamUrl=${encodeURIComponent(url)}`);
-  };
-
-  const handlePlay = () => {
-    if (isLoading) return;
-    if (streams.length === 0) {
-      setLocation(`/player?id=${showId}&type=tv`);
-    } else if (streams.length === 1) {
-      handleStreamSelect(streams[0]);
-    } else {
-      setShowQuality(true);
-    }
-  };
+function ManualEpisodePicker({ onSelect }: { onSelect: (season: number, ep: number) => void }) {
+  const [season, setSeason] = useState(1);
+  const [ep, setEp] = useState(1);
 
   return (
-    <>
+    <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl px-6 py-6 max-w-sm">
+      <p className="text-gray-400 text-sm mb-5 leading-relaxed">
+        No episode list is available for this series. Pick a season and episode to watch:
+      </p>
+
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        {/* Season picker */}
+        <div>
+          <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Season</p>
+          <div className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2 border border-zinc-700">
+            <button
+              onClick={() => setSeason(Math.max(1, season - 1))}
+              className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0"
+            >
+              <Minus className="h-3.5 w-3.5 text-white" />
+            </button>
+            <span className="flex-1 text-center text-white font-black text-xl">{season}</span>
+            <button
+              onClick={() => setSeason(season + 1)}
+              className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0"
+            >
+              <span className="text-white font-bold text-lg leading-none">+</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Episode picker */}
+        <div>
+          <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Episode</p>
+          <div className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2 border border-zinc-700">
+            <button
+              onClick={() => setEp(Math.max(1, ep - 1))}
+              className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0"
+            >
+              <Minus className="h-3.5 w-3.5 text-white" />
+            </button>
+            <span className="flex-1 text-center text-white font-black text-xl">{ep}</span>
+            <button
+              onClick={() => setEp(ep + 1)}
+              className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0"
+            >
+              <span className="text-white font-bold text-lg leading-none">+</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <button
-        onClick={handlePlay}
-        disabled={isLoading}
-        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-60"
+        onClick={() => onSelect(season, ep)}
+        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3.5 rounded-xl font-bold text-sm transition-all active:scale-95 w-full justify-center"
       >
-        {isLoading
-          ? <Loader2 className="h-4 w-4 animate-spin" />
-          : <Play className="h-4 w-4 fill-current" />}
-        {isLoading ? "Loading..." : "Stream Now"}
+        <Play className="h-4 w-4 fill-current" />
+        Watch Season {season} · Episode {ep}
       </button>
-      <QualityModal
-        isOpen={showQuality}
-        onClose={() => setShowQuality(false)}
-        streams={streams}
-        title={showTitle}
-        mode="stream"
-        onSelectStream={handleStreamSelect}
-      />
-    </>
+    </div>
   );
 }
 
@@ -262,11 +276,6 @@ export default function TVDetail() {
               )}
 
               <div className="flex items-center gap-3 pt-1 flex-wrap">
-                {/* Show Stream Now button when there are no seasons (fallback direct play) */}
-                {!hasSeasons && (
-                  <DirectStreamButton showId={show.subjectId} showTitle={title} />
-                )}
-
                 <button
                   onClick={() => toggleWishlist({ id: show.subjectId, type: "tv", title, poster })}
                   className={cn(
@@ -330,12 +339,14 @@ export default function TVDetail() {
           </div>
 
           {!hasSeasons ? (
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl px-6 py-8 text-center max-w-2xl">
-              <Tv className="h-10 w-10 text-zinc-600 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">Season and episode data is not yet available for this series.</p>
-              <p className="text-gray-500 text-xs mt-1">Use the Stream Now button above to watch directly.</p>
-            </div>
+            /* Fallback: manual season + episode picker */
+            <ManualEpisodePicker
+              onSelect={(season, ep) =>
+                setSelectedEpisode({ seasonNum: season, epNum: ep, epTitle: `Episode ${ep}` })
+              }
+            />
           ) : (
+            /* Full accordion with season + episode data from API */
             <div className="space-y-3 max-w-2xl">
               {seasons.map((s, i) => {
                 const sNum = s.seasonNumber ?? s.season ?? (i + 1);
@@ -364,7 +375,9 @@ export default function TVDetail() {
                       </div>
                       <div className="flex items-center gap-3">
                         {epCount > 0 && (
-                          <span className="text-xs text-gray-400 font-medium">{epCount} episode{epCount !== 1 ? "s" : ""}</span>
+                          <span className="text-xs text-gray-400 font-medium">
+                            {epCount} episode{epCount !== 1 ? "s" : ""}
+                          </span>
                         )}
                         <ChevronDown className={cn(
                           "h-5 w-5 text-gray-400 transition-transform duration-200",
