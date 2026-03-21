@@ -226,6 +226,10 @@ wss.on("connection", (ws) => {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         broadcastExcept(party, { type: "quality_select", label: msg.label }, clientId);
+      } else if (msg.type === "subtitle_select" && currentPartyCode) {
+        const party = parties.get(currentPartyCode);
+        if (!party) return;
+        broadcastExcept(party, { type: "subtitle_select", label: msg.label }, clientId);
       } else if (msg.type === "change_episode" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;

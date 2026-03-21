@@ -6,8 +6,9 @@ import { getTitle, getPoster, getYear } from "@/lib/utils";
 import { MediaItem } from "@/lib/api-types";
 import {
   Users, Plus, ArrowRight, Copy, Check, RefreshCw, Play, Pause,
-  Volume2, VolumeX, Send, X, ChevronLeft, PartyPopper, Shuffle,
+  Volume2, VolumeX, Send, X, ChevronLeft, Shuffle,
   SkipForward, Star, Coins, Crown, Tv, ChevronDown, Loader2, List,
+  LogOut, Minus, MessageSquare,
 } from "lucide-react";
 
 const API_BASE = "https://movieapi.xcasper.space/api";
@@ -386,9 +387,12 @@ export default function WatchParty() {
   const [wpEpLoadingSeasons, setWpEpLoadingSeasons] = useState(false);
   const [wpSelectedSeason, setWpSelectedSeason] = useState(1);
   const [wpSelectedEpisode, setWpSelectedEpisode] = useState(1);
+  const [wpManualSeason, setWpManualSeason] = useState(1);
+  const [wpManualEpisode, setWpManualEpisode] = useState(1);
+  const [pendingQualityLabel, setPendingQualityLabel] = useState<string | null>(null);
+  const [pendingSubtitleLabel, setPendingSubtitleLabel] = useState<string | null>(null);
 
   const pendingPlayRef = useRef<{ playing: boolean; time: number } | null>(null);
-  const pendingQualityRef = useRef<string | null>(null);
 
   const isHostRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -491,16 +495,9 @@ export default function WatchParty() {
         } else if (msg.type === "typing") {
           setTypingFrom(msg.isTyping ? msg.from : null);
         } else if (msg.type === "quality_select") {
-          pendingQualityRef.current = msg.label;
-          setAvailableStreams((prev) => {
-            const match = prev.find((s) => s.label === msg.label);
-            if (match) {
-              setCurrentStreamUrl(match.url);
-              setQualityPicked(true);
-              pendingQualityRef.current = null;
-            }
-            return prev;
-          });
+          setPendingQualityLabel(msg.label);
+        } else if (msg.type === "subtitle_select") {
+          setPendingSubtitleLabel(msg.label);
         } else if (msg.type === "episode_changed") {
           setShowWatchingEpPicker(false);
           setCurrentStreamUrl("");
@@ -509,8 +506,9 @@ export default function WatchParty() {
           setSubtitleOptions([]);
           setActiveSubtitle("off");
           setSubtitleCues([]);
+          setPendingQualityLabel(null);
+          setPendingSubtitleLabel(null);
           pendingPlayRef.current = null;
-          pendingQualityRef.current = null;
           if (videoRef.current) {
             videoRef.current.pause();
           }
@@ -751,17 +749,6 @@ export default function WatchParty() {
           setCurrentStreamUrl(options[0]?.url || "");
           setQualityPicked(true);
         } else {
-          const pendingLabel = pendingQualityRef.current;
-          if (pendingLabel) {
-            const match = options.find((o) => o.label === pendingLabel);
-            if (match) {
-              setCurrentStreamUrl(match.url);
-              setQualityPicked(true);
-              pendingQualityRef.current = null;
-              setAvailableStreams(options);
-              return;
-            }
-          }
           setAvailableStreams(options);
         }
         const rawSubs: any[] = json?.data?.subtitles || json?.data?.data?.subtitles || [];
@@ -783,6 +770,45 @@ export default function WatchParty() {
       .then((text) => setSubtitleCues(parseVTT(text)))
       .catch(() => setSubtitleCues([]));
   }, [activeSubtitle, subtitleOptions]);
+
+  /* apply pending quality when streams become available */
+  useEffect(() => {
+    if (!pendingQualityLabel || availableStreams.length === 0) return;
+    const match = availableStreams.find((s) => s.label === pendingQualityLabel);
+    if (match) {
+      setCurrentStreamUrl(match.url);
+      setQualityPicked(true);
+      setPendingQualityLabel(null);
+    }
+  }, [pendingQualityLabel, availableStreams]);
+
+  /* apply pending subtitle when subtitle options become available */
+  useEffect(() => {
+    if (!pendingSubtitleLabel) return;
+    if (pendingSubtitleLabel === "off") {
+      setActiveSubtitle("off");
+      setPendingSubtitleLabel(null);
+      return;
+    }
+    if (subtitleOptions.length === 0) return;
+    const match = subtitleOptions.find((s) => s.label === pendingSubtitleLabel);
+    if (match) {
+      setActiveSubtitle(match.label);
+      setPendingSubtitleLabel(null);
+    }
+  }, [pendingSubtitleLabel, subtitleOptions]);
+
+  /* periodic playback sync from host to keep both sides aligned */
+  useEffect(() => {
+    if (appPhase !== "watching") return;
+    const interval = setInterval(() => {
+      const video = videoRef.current;
+      if (video && isHostRef.current) {
+        sendWS({ type: "playback", playing: !video.paused, time: video.currentTime });
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [appPhase, sendWS]);
 
   const currentMovie = partyState?.movies?.[partyState?.currentMovieIdx || 0];
   const members = partyState?.members || [];
@@ -1165,28 +1191,34 @@ export default function WatchParty() {
     return (
       <div className="h-screen w-full bg-black flex flex-col overflow-hidden">
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-3 bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-800 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <button onClick={handleLeave} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <div>
-              <p className="text-white font-bold text-sm line-clamp-1">{currentMovie?.title || "Watch Party"}</p>
-              <div className="flex items-center gap-2">
-                {members.map((m) => (
-                  <span key={m.id} className="text-xs text-gray-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-                    {m.name}
-                  </span>
-                ))}
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-950 border-b border-zinc-800/80 flex-shrink-0">
+          <button
+            onClick={handleLeave}
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-zinc-800/80 hover:bg-red-600/20 hover:text-red-400 text-gray-400 transition-colors flex-shrink-0 border border-zinc-700/60"
+            title="Leave Party"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-bold text-sm line-clamp-1 leading-tight">{currentMovie?.title || "Watch Party"}</p>
+            {currentMovie?.season && currentMovie?.episode && (
+              <p className="text-gray-500 text-[11px] leading-tight">S{currentMovie.season} · E{currentMovie.episode}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {members.map((m) => (
+              <div key={m.id} className="flex items-center gap-1.5 bg-zinc-800/70 rounded-full px-2.5 py-1 border border-zinc-700/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                <span className="text-xs text-gray-300 font-medium">{m.name}</span>
               </div>
-            </div>
+            ))}
           </div>
           <button
             onClick={() => setShowChat((v) => !v)}
-            className={`p-2 rounded-lg border transition-colors ${showChat ? "bg-red-600/20 border-red-600/40 text-red-400" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}
+            className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors flex-shrink-0 ${showChat ? "bg-red-600/20 border-red-500/40 text-red-400" : "bg-zinc-800/80 border-zinc-700/60 text-gray-400 hover:text-white"}`}
+            title="Toggle Chat"
           >
-            <Send className="h-4 w-4" />
+            <MessageSquare className="h-4 w-4" />
           </button>
         </div>
 
@@ -1277,7 +1309,7 @@ export default function WatchParty() {
                     <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Subtitles</p>
                   </div>
                   <button
-                    onClick={() => { setActiveSubtitle("off"); setShowSubtitleMenu(false); }}
+                    onClick={() => { setActiveSubtitle("off"); setShowSubtitleMenu(false); sendWS({ type: "subtitle_select", label: "off" }); }}
                     className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 hover:bg-zinc-800 transition-colors ${activeSubtitle === "off" ? "text-red-400 font-semibold" : "text-gray-300"}`}
                   >
                     {activeSubtitle === "off" && <Check className="h-3.5 w-3.5" />}
@@ -1286,7 +1318,7 @@ export default function WatchParty() {
                   {subtitleOptions.map((s, i) => (
                     <button
                       key={i}
-                      onClick={() => { setActiveSubtitle(s.label); setShowSubtitleMenu(false); }}
+                      onClick={() => { setActiveSubtitle(s.label); setShowSubtitleMenu(false); sendWS({ type: "subtitle_select", label: s.label }); }}
                       className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 hover:bg-zinc-800 transition-colors ${activeSubtitle === s.label ? "text-red-400 font-semibold" : "text-gray-300"}`}
                     >
                       {activeSubtitle === s.label && <Check className="h-3.5 w-3.5" />}
@@ -1377,7 +1409,35 @@ export default function WatchParty() {
                       <Loader2 className="h-7 w-7 animate-spin text-red-500" />
                     </div>
                   ) : wpEpSeasons.length === 0 ? (
-                    <p className="text-gray-400 text-sm text-center py-4">No episode data available</p>
+                    /* Manual +/- picker fallback when no episode data from API */
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-xs text-gray-400 font-semibold mb-2">Season</p>
+                        <div className="flex items-center gap-3 bg-zinc-800 rounded-xl px-3 py-2.5 border border-zinc-700">
+                          <button onClick={() => setWpManualSeason(Math.max(1, wpManualSeason - 1))} className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0">
+                            <Minus className="h-3.5 w-3.5 text-white" />
+                          </button>
+                          <span className="flex-1 text-center text-white font-black text-2xl">{wpManualSeason}</span>
+                          <button onClick={() => setWpManualSeason(wpManualSeason + 1)} className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0 text-white font-bold text-lg">+</button>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 font-semibold mb-2">Episode</p>
+                        <div className="flex items-center gap-3 bg-zinc-800 rounded-xl px-3 py-2.5 border border-zinc-700">
+                          <button onClick={() => setWpManualEpisode(Math.max(1, wpManualEpisode - 1))} className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0">
+                            <Minus className="h-3.5 w-3.5 text-white" />
+                          </button>
+                          <span className="flex-1 text-center text-white font-black text-2xl">{wpManualEpisode}</span>
+                          <button onClick={() => setWpManualEpisode(wpManualEpisode + 1)} className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0 text-white font-bold text-lg">+</button>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { sendWS({ type: "change_episode", season: wpManualSeason, episode: wpManualEpisode }); setShowWatchingEpPicker(false); }}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Check className="h-4 w-4" /> S{wpManualSeason} · E{wpManualEpisode} — Switch for Everyone
+                      </button>
+                    </div>
                   ) : (
                     <>
                       <div>
@@ -1435,25 +1495,39 @@ export default function WatchParty() {
 
           {/* Chat panel */}
           {showChat && (
-            <div className="w-72 flex flex-col bg-zinc-950 border-l border-zinc-800 flex-shrink-0">
-              <div className="px-4 py-3 border-b border-zinc-800 flex-shrink-0">
-                <p className="text-white font-bold text-sm">Party Chat</p>
-                {typingFrom && (
-                  <p className="text-gray-500 text-xs mt-0.5 italic">{typingFrom} is typing...</p>
+            <div className="w-72 flex flex-col bg-zinc-950 border-l border-zinc-800/80 flex-shrink-0">
+              <div className="px-4 py-2.5 border-b border-zinc-800/80 flex items-center justify-between flex-shrink-0 bg-zinc-900/50">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-3.5 w-3.5 text-red-400" />
+                  <p className="text-white font-bold text-sm">Party Chat</p>
+                </div>
+                {typingFrom ? (
+                  <p className="text-gray-500 text-xs italic">{typingFrom} typing...</p>
+                ) : (
+                  <span className="text-xs text-gray-600">{chatMessages.length} msgs</span>
                 )}
               </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                {chatMessages.map((msg, i) => (
-                  <div key={i} className={`flex flex-col ${msg.from === (me?.name || name) ? "items-end" : "items-start"}`}>
-                    <span className="text-xs text-gray-500 mb-0.5">{msg.from}</span>
-                    <div className={`max-w-[85%] px-3 py-2 rounded-xl text-sm ${msg.from === (me?.name || name) ? "bg-red-600 text-white rounded-br-sm" : "bg-zinc-800 text-gray-200 rounded-bl-sm"}`}>
-                      {msg.message}
-                    </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {chatMessages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full gap-2 py-6">
+                    <MessageSquare className="h-7 w-7 text-zinc-700" />
+                    <p className="text-gray-600 text-xs text-center">No messages yet.<br />Say hello!</p>
                   </div>
-                ))}
+                )}
+                {chatMessages.map((msg, i) => {
+                  const isMe = msg.from === (me?.name || name);
+                  return (
+                    <div key={i} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                      <span className="text-[10px] text-gray-600 mb-1 px-1 font-medium">{isMe ? "You" : msg.from}</span>
+                      <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${isMe ? "bg-red-600 text-white rounded-tr-sm" : "bg-zinc-800 text-gray-200 rounded-tl-sm border border-zinc-700/50"}`}>
+                        {msg.message}
+                      </div>
+                    </div>
+                  );
+                })}
                 <div ref={chatEndRef} />
               </div>
-              <div className="p-3 border-t border-zinc-800 flex-shrink-0">
+              <div className="p-3 border-t border-zinc-800/80 flex-shrink-0 bg-zinc-900/30">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1461,9 +1535,9 @@ export default function WatchParty() {
                     onChange={(e) => handleChatInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && sendChat()}
                     placeholder="Say something..."
-                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-red-500 transition-colors"
+                    className="flex-1 bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-red-500/60 transition-colors"
                   />
-                  <button onClick={sendChat} className="w-9 h-9 bg-red-600 hover:bg-red-700 rounded-xl flex items-center justify-center transition-colors flex-shrink-0">
+                  <button onClick={sendChat} className="w-9 h-9 bg-red-600 hover:bg-red-700 active:scale-95 rounded-xl flex items-center justify-center transition-all flex-shrink-0">
                     <Send className="h-4 w-4 text-white" />
                   </button>
                 </div>
