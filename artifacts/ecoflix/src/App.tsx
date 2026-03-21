@@ -12,6 +12,7 @@ import Browse from "./pages/Browse";
 import Ranking from "./pages/Ranking";
 import Wishlist from "./pages/Wishlist";
 import Category from "./pages/Category";
+import WatchHistory from "./pages/WatchHistory";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/category/:slug" component={Category} />
       <Route path="/ranking" component={Ranking} />
       <Route path="/wishlist" component={Wishlist} />
+      <Route path="/history" component={WatchHistory} />
       <Route path="/movie/:id" component={MovieDetail} />
       <Route path="/tv/:id" component={TVDetail} />
       <Route path="/player" component={Player} />

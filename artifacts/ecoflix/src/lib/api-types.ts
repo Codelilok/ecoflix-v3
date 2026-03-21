@@ -22,6 +22,7 @@ export interface CastMember {
   role?: string;
   character?: string;
   avatar?: { url: string };
+  avatarUrl?: string;
 }
 
 export interface EpisodeItem {
@@ -67,6 +68,8 @@ export interface Stream {
   proxyUrl?: string;
   downloadUrl?: string;
   duration?: number;
+  size?: number;
+  fileSize?: number;
 }
 
 export interface PlayResponse {

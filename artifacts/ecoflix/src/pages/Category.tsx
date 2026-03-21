@@ -1,9 +1,9 @@
 import { useParams } from "wouter";
-import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { MediaCard } from "@/components/MediaCard";
 import { Spinner } from "@/components/ui/spinner";
 import { useBrowseCategory, useSearchCategory, useRanking } from "@/hooks/use-ecoflix";
+import { ArrowLeft } from "lucide-react";
 
 const CATEGORY_CONFIG: Record<string, {
   label: string;
@@ -73,7 +73,16 @@ export default function Category() {
   return (
     <Layout>
       <div className="pt-24 px-6 md:px-14 max-w-screen-2xl mx-auto w-full min-h-screen pb-16">
-        <h1 className="text-3xl md:text-4xl font-black text-white mb-8">{label}</h1>
+        <div className="flex items-center gap-4 mb-8">
+          <button
+            onClick={() => window.history.back()}
+            className="flex items-center justify-center w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-500 transition-all"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="h-5 w-5 text-white" />
+          </button>
+          <h1 className="text-3xl md:text-4xl font-black text-white">{label}</h1>
+        </div>
         <CategoryContent slug={slug || ""} />
       </div>
     </Layout>

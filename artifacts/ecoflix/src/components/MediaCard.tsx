@@ -25,10 +25,10 @@ export function MediaCard({ item, className, showProgress, onRemove }: MediaCard
       {onRemove && (
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(String(item.subjectId)); }}
-          className="absolute top-1.5 left-1.5 z-30 w-6 h-6 rounded-full bg-black/70 border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+          className="absolute top-1.5 left-1.5 z-30 w-7 h-7 rounded-full bg-black/80 border border-white/30 flex items-center justify-center transition-opacity hover:bg-red-600 opacity-100"
           title="Remove"
         >
-          <X className="h-3 w-3 text-white" />
+          <X className="h-3.5 w-3.5 text-white" />
         </button>
       )}
 

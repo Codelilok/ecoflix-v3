@@ -75,6 +75,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "plyr": "^3.8.4",
     "usehooks-ts": "^3.1.1"
   }
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, Menu, X } from "lucide-react";
+import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
@@ -17,9 +17,18 @@ export function Navbar() {
   }, []);
 
   const navLinks = [
-    { name: "Home", path: "/" },
-    { name: "Browse", path: "/browse" },
-    { name: "Rankings", path: "/ranking" },
+    { name: "Home", path: "/", icon: Home },
+    { name: "Browse", path: "/browse", icon: Grid },
+    { name: "Rankings", path: "/ranking", icon: BarChart2 },
+  ];
+
+  const menuLinks = [
+    { name: "Home", path: "/", icon: Home },
+    { name: "Browse", path: "/browse", icon: Grid },
+    { name: "Rankings", path: "/ranking", icon: BarChart2 },
+    { name: "Search", path: "/search", icon: Search },
+    { name: "My Wishlist", path: "/wishlist", icon: Heart },
+    { name: "Watch History", path: "/history", icon: Clock },
   ];
 
   return (
@@ -59,9 +68,12 @@ export function Navbar() {
           <Link href="/wishlist" className="text-gray-300 hover:text-primary transition-colors">
             <Heart className="h-5 w-5" />
           </Link>
+          <Link href="/history" className="hidden md:flex text-gray-300 hover:text-primary transition-colors">
+            <History className="h-5 w-5" />
+          </Link>
 
           <button
-            className="md:hidden text-gray-300"
+            className="text-gray-300 hover:text-primary transition-colors"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -70,20 +82,28 @@ export function Navbar() {
       </div>
 
       {mobileMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 w-full bg-background/95 backdrop-blur-xl border-t border-border p-4 flex flex-col gap-4 shadow-xl">
-          {navLinks.map((link) => (
-            <Link
-              key={link.name}
-              href={link.path}
-              onClick={() => setMobileMenuOpen(false)}
-              className={cn(
-                "text-lg font-medium p-2 rounded-md transition-colors",
-                location === link.path ? "bg-primary/20 text-primary" : "text-gray-300 hover:bg-white/5"
-              )}
-            >
-              {link.name}
-            </Link>
-          ))}
+        <div className="absolute top-full left-0 w-full bg-zinc-950/98 backdrop-blur-xl border-t border-zinc-800 shadow-2xl">
+          <div className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-col gap-1">
+            {menuLinks.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.name}
+                  href={link.path}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 text-base font-medium p-3 rounded-xl transition-colors",
+                    location === link.path
+                      ? "bg-red-600/20 text-primary"
+                      : "text-gray-300 hover:bg-white/5 hover:text-white"
+                  )}
+                >
+                  <Icon className="h-5 w-5 flex-shrink-0" />
+                  {link.name}
+                </Link>
+              );
+            })}
+          </div>
         </div>
       )}
     </header>

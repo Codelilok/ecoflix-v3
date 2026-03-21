@@ -6,8 +6,11 @@ import { useDetail, useRecommend, usePlay } from "@/hooks/use-ecoflix";
 import { useWishlist } from "@/hooks/use-local-state";
 import { ContentRow } from "@/components/ContentRow";
 import { CastCard } from "@/components/CastCard";
+import { QualityModal } from "@/components/QualityModal";
 import { getTitle, getPoster, getYear, getGenres, cn } from "@/lib/utils";
-import { Play, Plus, Check, Star, Calendar, Globe, Download, Share2, Film, Users } from "lucide-react";
+import { Play, Plus, Check, Star, Calendar, Globe, Download, Share2, Film, Users, ArrowLeft } from "lucide-react";
+import { Stream } from "@/lib/api-types";
+import { useLocation } from "wouter";
 
 function shareMedia(title: string, id: string) {
   const url = `${window.location.origin}/movie/${id}`;
@@ -20,10 +23,13 @@ function shareMedia(title: string, id: string) {
 
 export default function MovieDetail() {
   const { id } = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
   const { data: movie, isLoading, error } = useDetail(id);
   const { data: recommend } = useRecommend(id);
   const { data: streamData, isLoading: streamLoading } = usePlay(id, 'movie');
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const [showStreamModal, setShowStreamModal] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   if (isLoading) return <Layout><FullPageLoader /></Layout>;
 
@@ -43,16 +49,27 @@ export default function MovieDetail() {
   const year = getYear(movie);
   const genres = getGenres(movie);
   const isSaved = isInWishlist(movie.subjectId);
-  const streamUrl = streamData?.streams?.[0]?.proxyUrl || streamData?.streams?.[0]?.url;
-  const downloadUrl = streamData?.streams?.[0]?.downloadUrl || streamUrl;
+  const streams: Stream[] = streamData?.streams || [];
+
+  const handleStreamSelect = (stream: Stream) => {
+    const url = stream.proxyUrl || stream.url;
+    setLocation(`/player?id=${movie.subjectId}&type=movie&streamUrl=${encodeURIComponent(url)}`);
+  };
 
   return (
     <Layout>
-      {/* Hero backdrop */}
       <div className="relative w-full h-[55vh] md:h-[70vh]">
         {poster && <img src={poster} alt={title} className="w-full h-full object-cover object-top" />}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/75 to-black/10" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
+
+        <button
+          onClick={() => window.history.back()}
+          className="absolute top-20 left-6 md:left-14 z-10 flex items-center justify-center w-10 h-10 rounded-full bg-black/50 border border-white/20 hover:bg-black/80 transition-all backdrop-blur-sm"
+          aria-label="Go back"
+        >
+          <ArrowLeft className="h-5 w-5 text-white" />
+        </button>
 
         <div className="absolute bottom-0 left-0 w-full px-6 md:px-14 pb-8 max-w-screen-2xl">
           <div className="flex flex-col md:flex-row gap-6 items-end">
@@ -110,34 +127,6 @@ export default function MovieDetail() {
 
       <div className="max-w-screen-2xl mx-auto w-full px-6 md:px-14 py-8 space-y-10">
 
-        {/* Trailer / Stream */}
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <Film className="h-5 w-5 text-red-500" />
-            <h3 className="text-xl font-bold text-white">Trailer</h3>
-          </div>
-          <div className="rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 max-w-3xl" style={{ aspectRatio: '16/9' }}>
-            {streamLoading ? (
-              <div className="w-full h-full flex items-center justify-center text-zinc-500">
-                <div className="animate-spin h-8 w-8 border-2 border-red-500 border-t-transparent rounded-full" />
-              </div>
-            ) : streamUrl ? (
-              <video
-                src={streamUrl}
-                controls
-                preload="metadata"
-                className="w-full h-full object-contain bg-black"
-                crossOrigin="anonymous"
-              />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 gap-3 p-8">
-                <Film className="h-12 w-12" />
-                <p className="text-sm text-center">Trailer not available for this title</p>
-              </div>
-            )}
-          </div>
-        </section>
-
         {/* Overview */}
         <section>
           <h3 className="text-xl font-bold text-white mb-3">Overview</h3>
@@ -161,7 +150,7 @@ export default function MovieDetail() {
                   key={i}
                   name={actor.name}
                   role={actor.role || actor.character}
-                  avatarUrl={actor.avatar?.url}
+                  avatarUrl={(actor as any).avatarUrl || actor.avatar?.url}
                 />
               ))}
             </div>
@@ -172,26 +161,36 @@ export default function MovieDetail() {
         <section className="bg-zinc-900/70 rounded-2xl border border-zinc-800 p-6 md:p-8">
           <h3 className="text-xl font-bold text-white mb-5">Watch &amp; Download</h3>
           <div className="flex flex-wrap gap-4">
-            <Link href={`/player?id=${movie.subjectId}&type=movie`}>
-              <button className="flex items-center gap-3 bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl font-bold text-base transition-colors shadow-lg shadow-red-600/20 active:scale-95">
-                <Play className="h-5 w-5 fill-current" />
-                Stream Now
-              </button>
-            </Link>
+            <button
+              onClick={() => {
+                if (streams.length === 0) {
+                  setLocation(`/player?id=${movie.subjectId}&type=movie`);
+                } else {
+                  setShowStreamModal(true);
+                }
+              }}
+              disabled={streamLoading}
+              className="flex items-center gap-3 bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl font-bold text-base transition-colors shadow-lg shadow-red-600/20 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Play className="h-5 w-5 fill-current" />
+              {streamLoading ? 'Loading...' : 'Stream Now'}
+            </button>
 
-            {downloadUrl ? (
-              <a href={downloadUrl} download target="_blank" rel="noopener noreferrer">
-                <button className="flex items-center gap-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 hover:border-zinc-400 text-white px-8 py-4 rounded-xl font-bold text-base transition-colors active:scale-95">
-                  <Download className="h-5 w-5" />
-                  Download
-                </button>
-              </a>
-            ) : (
-              <button disabled className="flex items-center gap-3 bg-zinc-800/50 border border-zinc-700 text-zinc-500 px-8 py-4 rounded-xl font-bold text-base cursor-not-allowed">
-                <Download className="h-5 w-5" />
-                Download
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (streams.length > 0) setShowDownloadModal(true);
+              }}
+              disabled={streamLoading || streams.length === 0}
+              className={cn(
+                "flex items-center gap-3 px-8 py-4 rounded-xl font-bold text-base transition-colors active:scale-95",
+                streams.length > 0 && !streamLoading
+                  ? "bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 hover:border-zinc-400 text-white"
+                  : "bg-zinc-800/50 border border-zinc-700 text-zinc-500 cursor-not-allowed"
+              )}
+            >
+              <Download className="h-5 w-5" />
+              Download
+            </button>
           </div>
           <p className="text-xs text-zinc-500 mt-4">Stream in your browser or download for offline viewing.</p>
         </section>
@@ -201,6 +200,23 @@ export default function MovieDetail() {
           <ContentRow title="You May Also Like" items={recommend} />
         )}
       </div>
+
+      <QualityModal
+        isOpen={showStreamModal}
+        onClose={() => setShowStreamModal(false)}
+        streams={streams}
+        title={title}
+        mode="stream"
+        onSelectStream={handleStreamSelect}
+      />
+
+      <QualityModal
+        isOpen={showDownloadModal}
+        onClose={() => setShowDownloadModal(false)}
+        streams={streams}
+        title={title}
+        mode="download"
+      />
     </Layout>
   );
 }

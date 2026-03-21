@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDebounceValue } from "usehooks-ts";
 import { Layout } from "@/components/Layout";
 import { MediaCard } from "@/components/MediaCard";
 import { Spinner } from "@/components/ui/spinner";
-import { useSearch } from "@/hooks/use-ecoflix";
-import { Search as SearchIcon, Film, Tv, LayoutGrid } from "lucide-react";
+import { useSearch, useTrending } from "@/hooks/use-ecoflix";
+import { useSearchHistory } from "@/hooks/use-local-state";
+import { Search as SearchIcon, Film, Tv, LayoutGrid, X, TrendingUp, Clock } from "lucide-react";
 import { cn, getType } from "@/lib/utils";
 
 const POPULAR_SEARCHES = ["Action", "Drama", "Comedy", "Thriller", "Sci-Fi", "Horror", "Romance", "Documentary", "Fantasy", "Adventure"];
@@ -15,11 +16,21 @@ export default function Search() {
   const [filter, setFilter] = useState<'all' | 'movie' | 'tv'>('all');
 
   const { data, isLoading } = useSearch(debouncedQuery);
+  const { data: trending } = useTrending();
+  const { searchHistory, addSearch, removeSearch, clearSearchHistory } = useSearchHistory();
+
+  useEffect(() => {
+    if (debouncedQuery.length > 1) {
+      addSearch(debouncedQuery);
+    }
+  }, [debouncedQuery]);
 
   const results = Array.isArray(data) ? data : [];
   const filteredResults = filter === 'all'
     ? results
     : results.filter(item => getType(item) === filter);
+
+  const everyoneSearching = (trending || []).slice(0, 10);
 
   return (
     <Layout>
@@ -34,6 +45,14 @@ export default function Search() {
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
         <div className="flex justify-center gap-3 mb-10">
@@ -59,19 +78,73 @@ export default function Search() {
         </div>
 
         {query.length < 2 ? (
-          <div className="text-center">
-            <h3 className="text-lg font-semibold mb-5 text-gray-400">Popular Searches</h3>
-            <div className="flex flex-wrap justify-center gap-3 max-w-2xl mx-auto">
-              {POPULAR_SEARCHES.map(term => (
-                <button
-                  key={term}
-                  onClick={() => setQuery(term)}
-                  className="bg-zinc-900 hover:bg-red-600/20 hover:text-red-400 hover:border-red-500/50 border border-zinc-700 px-5 py-2.5 rounded-lg text-sm font-medium text-gray-300 transition-colors"
-                >
-                  {term}
-                </button>
-              ))}
+          <div>
+            {searchHistory.length > 0 && (
+              <div className="max-w-2xl mx-auto mb-10">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Recent
+                  </h3>
+                  <button
+                    onClick={clearSearchHistory}
+                    className="text-xs text-gray-500 hover:text-red-400 transition-colors font-medium"
+                  >
+                    Clear all
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {searchHistory.map(term => (
+                    <div
+                      key={term}
+                      className="flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 rounded-full pl-4 pr-2 py-2 group hover:border-zinc-500 transition-colors"
+                    >
+                      <button
+                        onClick={() => setQuery(term)}
+                        className="text-sm text-gray-200 hover:text-white transition-colors"
+                      >
+                        {term}
+                      </button>
+                      <button
+                        onClick={() => removeSearch(term)}
+                        className="w-5 h-5 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0"
+                      >
+                        <X className="h-3 w-3 text-white" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="text-center mb-10">
+              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-5">Popular Searches</h3>
+              <div className="flex flex-wrap justify-center gap-3 max-w-2xl mx-auto">
+                {POPULAR_SEARCHES.map(term => (
+                  <button
+                    key={term}
+                    onClick={() => setQuery(term)}
+                    className="bg-zinc-900 hover:bg-red-600/20 hover:text-red-400 hover:border-red-500/50 border border-zinc-700 px-5 py-2.5 rounded-lg text-sm font-medium text-gray-300 transition-colors"
+                  >
+                    {term}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {everyoneSearching.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2 mb-5">
+                  <TrendingUp className="h-5 w-5 text-red-500" />
+                  <h3 className="text-lg font-bold text-white">Everyone is Searching</h3>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
+                  {everyoneSearching.map((item, i) => (
+                    <MediaCard key={`${item.subjectId}-${i}`} item={item} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div>

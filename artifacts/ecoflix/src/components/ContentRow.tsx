@@ -10,9 +10,10 @@ interface ContentRowProps {
   progressMap?: Record<string, number>;
   showMoreHref?: string;
   onRemove?: (id: string) => void;
+  maxItems?: number;
 }
 
-export function ContentRow({ title, items, progressMap = {}, showMoreHref, onRemove }: ContentRowProps) {
+export function ContentRow({ title, items, progressMap = {}, showMoreHref, onRemove, maxItems = 10 }: ContentRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
 
   const scroll = useCallback((direction: 'left' | 'right') => {
@@ -27,6 +28,8 @@ export function ContentRow({ title, items, progressMap = {}, showMoreHref, onRem
 
   if (!items || items.length === 0) return null;
 
+  const displayItems = onRemove ? items : items.slice(0, maxItems);
+
   return (
     <div className="relative py-4">
       <div className="flex items-center justify-between px-6 md:px-14 mb-3">
@@ -34,13 +37,13 @@ export function ContentRow({ title, items, progressMap = {}, showMoreHref, onRem
         <div className="flex items-center gap-2">
           {showMoreHref && (
             <Link href={showMoreHref}>
-              <span className="text-sm text-red-500 hover:text-red-400 font-semibold transition-colors cursor-pointer flex items-center gap-1 mr-2">
+              <span className="text-sm text-red-500 hover:text-red-400 font-semibold transition-colors cursor-pointer flex items-center gap-1 mr-1">
                 Show More <ChevronRight className="h-4 w-4" />
               </span>
             </Link>
           )}
-          {items.length > 4 && (
-            <div className="hidden md:flex items-center gap-1">
+          {displayItems.length > 3 && (
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => scroll('left')}
                 className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:bg-zinc-700 hover:border-zinc-500 transition-all"
@@ -65,7 +68,7 @@ export function ContentRow({ title, items, progressMap = {}, showMoreHref, onRem
         className="flex gap-2 md:gap-3 overflow-x-auto px-6 md:px-14 pb-2"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
-        {items.map((item, index) => (
+        {displayItems.map((item, index) => (
           <div
             key={`${item.subjectId}-${index}`}
             className="w-32 sm:w-36 md:w-40 lg:w-44 shrink-0"
