@@ -213,6 +213,12 @@ wss.on("connection", (ws) => {
           party.phase = "done";
           sendPartyState(party);
         }
+      } else if (msg.type === "stream_url" && currentPartyCode) {
+        const party = parties.get(currentPartyCode);
+        if (!party) return;
+        const isHost = party.members[0]?.id === clientId;
+        if (!isHost) return;
+        broadcastToAll(party, { type: "stream_url", url: msg.url });
       } else if (msg.type === "start_watching" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
