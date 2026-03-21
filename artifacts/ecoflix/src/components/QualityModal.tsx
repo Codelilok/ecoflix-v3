@@ -107,7 +107,8 @@ export function QualityModal({
     const subUrl = sub.url || sub.src;
     if (subUrl) {
       setTimeout(() => {
-        triggerDownload(subUrl, `${subtitleFilename}.srt`);
+        const label = sub.label || sub.language || sub.lang || "subtitle";
+        triggerDownload(subUrl, `${subtitleFilename}.${label}.vtt`);
       }, 500);
     }
     onClose();

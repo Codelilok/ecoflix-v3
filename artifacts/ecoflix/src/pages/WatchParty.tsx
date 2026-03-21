@@ -175,6 +175,8 @@ export default function WatchParty() {
   const [showChat, setShowChat] = useState(true);
   const [countdownSecs, setCountdownSecs] = useState<number | null>(null);
   const [syncPending, setSyncPending] = useState(false);
+  const [currentStreamUrl, setCurrentStreamUrl] = useState<string>("");
+  const [streamLoading, setStreamLoading] = useState(false);
 
   const isHostRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -458,6 +460,30 @@ export default function WatchParty() {
       if (countdownTimer.current) clearInterval(countdownTimer.current);
     };
   }, []);
+
+  const currentMovieForFetch = partyState?.movies?.[partyState?.currentMovieIdx || 0];
+
+  useEffect(() => {
+    if (!currentMovieForFetch?.id || (appPhase !== "watching" && appPhase !== "between")) return;
+    setCurrentStreamUrl("");
+    setStreamLoading(true);
+    const BASE_URL = "https://movieapi.xcasper.space/api";
+    fetch(`${BASE_URL}/play?subjectId=${encodeURIComponent(currentMovieForFetch.id)}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+      },
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        const streams = json?.data?.streams || [];
+        const best = streams[0];
+        const url = best?.proxyUrl || best?.url || "";
+        setCurrentStreamUrl(url);
+      })
+      .catch(() => setCurrentStreamUrl(""))
+      .finally(() => setStreamLoading(false));
+  }, [currentMovieForFetch?.id, appPhase]);
 
   const currentMovie = partyState?.movies?.[partyState?.currentMovieIdx || 0];
   const members = partyState?.members || [];
@@ -848,13 +874,26 @@ export default function WatchParty() {
           <div className="flex-1 flex flex-col bg-black relative">
             <div className="flex-1 flex items-center justify-center relative">
               {currentMovie ? (
-                <video
-                  ref={videoRef}
-                  key={currentMovie.id}
-                  className="max-h-full max-w-full"
-                  playsInline
-                  onClick={togglePlay}
-                />
+                streamLoading ? (
+                  <div className="flex flex-col items-center gap-4 text-white">
+                    <RefreshCw className="h-10 w-10 animate-spin text-red-500" />
+                    <p className="text-gray-400 text-sm">Loading stream for <span className="text-white font-semibold">{currentMovie.title}</span>...</p>
+                  </div>
+                ) : currentStreamUrl ? (
+                  <video
+                    ref={videoRef}
+                    key={currentMovie.id}
+                    src={currentStreamUrl}
+                    className="max-h-full max-w-full"
+                    playsInline
+                    onClick={togglePlay}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-4 text-white">
+                    <Play className="h-12 w-12 text-zinc-700" />
+                    <p className="text-gray-500 text-sm">Stream unavailable for this title</p>
+                  </div>
+                )
               ) : (
                 <div className="flex flex-col items-center gap-4 text-white">
                   <Play className="h-12 w-12 text-zinc-700" />
