@@ -1,29 +1,17 @@
-import { useState } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Spinner } from "@/components/ui/spinner";
 import { useRanking } from "@/hooks/use-ecoflix";
 import { getTitle, getPoster, getYear, getType, cn } from "@/lib/utils";
-import { Trophy, Film, Tv, Star } from "lucide-react";
+import { Trophy, Film, Star } from "lucide-react";
 
 export default function Ranking() {
-  const [tab, setTab] = useState<'movie' | 'tv'>('movie');
-  const { data: movieData, isLoading: loadMovies } = useRanking('movie');
-  const { data: tvData, isLoading: loadTv } = useRanking('tv');
+  const { data: movieData, isLoading } = useRanking('movie');
 
   const rawMovies = Array.isArray(movieData) ? movieData : [];
-  const rawTv = Array.isArray(tvData) ? tvData : [];
-
-  // Trust the API categorization — movie ranking returns movies, tv ranking returns series
   const movies = rawMovies.filter(i => i.subjectType === 1).length > 0
     ? rawMovies.filter(i => i.subjectType === 1)
     : rawMovies;
-  const tvShows = rawTv.filter(i => i.subjectType === 2).length > 0
-    ? rawTv.filter(i => i.subjectType === 2)
-    : rawTv;
-
-  const items = tab === 'movie' ? movies : tvShows;
-  const isLoading = tab === 'movie' ? loadMovies : loadTv;
 
   const getMedalStyle = (index: number) => {
     if (index === 0) return "text-yellow-400 text-4xl md:text-5xl font-black";
@@ -40,38 +28,17 @@ export default function Ranking() {
             <Trophy className="h-9 w-9 text-red-500" />
             Top Rankings
           </h1>
-
-          <div className="inline-flex bg-zinc-900 p-1 rounded-lg border border-zinc-800">
-            <button
-              onClick={() => setTab('movie')}
-              className={cn(
-                "flex items-center gap-2 px-6 py-2.5 rounded-md font-semibold transition-all text-sm",
-                tab === 'movie' ? "bg-red-600 text-white" : "text-gray-400 hover:text-white"
-              )}
-            >
-              <Film className="h-4 w-4" /> Movies
-            </button>
-            <button
-              onClick={() => setTab('tv')}
-              className={cn(
-                "flex items-center gap-2 px-6 py-2.5 rounded-md font-semibold transition-all text-sm",
-                tab === 'tv' ? "bg-red-600 text-white" : "text-gray-400 hover:text-white"
-              )}
-            >
-              <Tv className="h-4 w-4" /> TV Shows
-            </button>
-          </div>
         </div>
 
         {isLoading ? (
           <div className="flex justify-center py-20"><Spinner className="h-10 w-10" /></div>
-        ) : items.length === 0 ? (
+        ) : movies.length === 0 ? (
           <div className="text-center py-20 text-gray-500">
-            <p className="text-xl">No {tab === 'movie' ? 'movies' : 'TV shows'} found.</p>
+            <p className="text-xl">No movies found.</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {items.map((item, index) => {
+            {movies.map((item, index) => {
               const title = getTitle(item);
               const poster = getPoster(item);
               const year = getYear(item);

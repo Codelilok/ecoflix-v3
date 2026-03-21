@@ -3,10 +3,11 @@ import { useLocation } from "wouter";
 import { usePlay, useDetail } from "@/hooks/use-ecoflix";
 import { useContinueWatching, useWatchHistory } from "@/hooks/use-local-state";
 import { getTitle, getPoster } from "@/lib/utils";
-import { Stream } from "@/lib/api-types";
+import { Stream, EpisodeItem, SeasonItem } from "@/lib/api-types";
 import {
   ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   RotateCcw, RotateCw, Settings, Loader2, AlertCircle, Check,
+  List, ChevronDown, X,
 } from "lucide-react";
 
 function formatTime(s: number): string {
@@ -19,6 +20,10 @@ function formatTime(s: number): string {
 }
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+function cn(...classes: (string | boolean | undefined | null)[]): string {
+  return classes.filter(Boolean).join(" ");
+}
 
 export default function Player() {
   const [, setLocation] = useLocation();
@@ -38,7 +43,9 @@ export default function Player() {
   const { addToHistory } = useWatchHistory();
 
   const streams: Stream[] = streamData?.streams || [];
-  const subtitles: any[] = (streamData as any)?.data?.subtitles || (streamData as any)?.subtitles || [];
+  const rawSubtitles: any[] = (streamData as any)?.data?.subtitles || (streamData as any)?.subtitles || [];
+
+  const seasons: SeasonItem[] = (detailData as any)?.resource || [];
 
   const [currentStream, setCurrentStream] = useState<string | null>(directStreamUrl);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -52,10 +59,12 @@ export default function Player() {
   const [isBuffering, setIsBuffering] = useState(true);
   const [speed, setSpeed] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"speed" | "quality">("speed");
-  const [seekingTo, setSeekingTo] = useState<number | null>(null);
-  const [centerAnim, setCenterAnim] = useState<"play" | "pause" | "fwd" | "rwd" | null>(null);
+  const [settingsTab, setSettingsTab] = useState<"speed" | "quality" | "subtitles">("speed");
   const [isScrubbing, setIsScrubbing] = useState(false);
+  const [centerAnim, setCenterAnim] = useState<"play" | "pause" | "fwd" | "rwd" | null>(null);
+  const [activeSubtitle, setActiveSubtitle] = useState<string>("off");
+  const [showEpisodes, setShowEpisodes] = useState(false);
+  const [expandedSeason, setExpandedSeason] = useState<number | null>(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -143,9 +152,7 @@ export default function Player() {
   }, [currentStream, id]);
 
   useEffect(() => {
-    const handleFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
+    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", handleFsChange);
     return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
@@ -154,6 +161,15 @@ export default function Player() {
     showControlsTemporarily();
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const tracks = video.textTracks;
+    for (let i = 0; i < tracks.length; i++) {
+      tracks[i].mode = tracks[i].label === activeSubtitle ? "showing" : "hidden";
+    }
+  }, [activeSubtitle, currentStream]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
@@ -242,7 +258,23 @@ export default function Player() {
     setSpeed(s);
   }, []);
 
+  const handleBack = useCallback(() => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      setLocation(type === "tv" ? `/tv/${id}` : `/movie/${id}`);
+    }
+  }, [id, type, setLocation]);
+
+  const goToEpisode = useCallback((seasonNum: number, epNum: number) => {
+    setShowEpisodes(false);
+    setCurrentStream(null);
+    historyLoggedRef.current = false;
+    setLocation(`/player?id=${id}&type=tv&season=${seasonNum}&episode=${epNum}`);
+  }, [id, setLocation]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (showEpisodes) return;
     switch (e.key) {
       case " ": e.preventDefault(); togglePlay(); break;
       case "ArrowRight": e.preventDefault(); seek(10); break;
@@ -251,8 +283,9 @@ export default function Player() {
       case "ArrowDown": e.preventDefault(); handleVolumeChange(Math.max(0, volume - 0.1)); break;
       case "f": case "F": toggleFullscreen(); break;
       case "m": case "M": toggleMute(); break;
+      case "Escape": setShowEpisodes(false); setShowSettings(false); break;
     }
-  }, [togglePlay, seek, handleVolumeChange, volume, toggleFullscreen, toggleMute]);
+  }, [togglePlay, seek, handleVolumeChange, volume, toggleFullscreen, toggleMute, showEpisodes]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -271,11 +304,18 @@ export default function Player() {
 
   const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
   const hasStreams = streams.length > 1;
+  const hasSubtitles = rawSubtitles.length > 0;
   const currentResolution = (() => {
     if (!currentStream) return null;
     const match = streams.find(s => (s.proxyUrl || s.url) === currentStream);
     return match?.resolutions ? `${match.resolutions}p` : null;
   })();
+
+  const settingsTabs = [
+    "speed",
+    ...(hasStreams ? ["quality"] : []),
+    ...(hasSubtitles ? ["subtitles"] : []),
+  ] as const;
 
   return (
     <div
@@ -293,8 +333,21 @@ export default function Player() {
           className="w-full h-full object-contain"
           playsInline
           crossOrigin="anonymous"
-        />
-      ) : (loadStream && !directStreamUrl) ? null : null}
+        >
+          {rawSubtitles.map((sub: any, i: number) => {
+            const label = sub.label || sub.language || sub.lang || `Subtitle ${i + 1}`;
+            return (
+              <track
+                key={i}
+                kind="subtitles"
+                src={sub.url || sub.src}
+                srcLang={sub.lang || sub.language || "en"}
+                label={label}
+              />
+            );
+          })}
+        </video>
+      ) : null}
 
       {isBuffering && currentStream && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -310,7 +363,7 @@ export default function Player() {
             No playback URL was returned for this title. Please try again later.
           </p>
           <button
-            onClick={() => window.history.back()}
+            onClick={handleBack}
             className="px-8 py-3 bg-zinc-800 border border-zinc-600 rounded-lg font-semibold hover:bg-zinc-700 transition-colors"
           >
             Go Back
@@ -326,7 +379,7 @@ export default function Player() {
       )}
 
       {centerAnim && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
           <div className="animate-ping-once bg-white/20 rounded-full p-8">
             {centerAnim === "play" && <Play className="h-12 w-12 text-white fill-current" />}
             {centerAnim === "pause" && <Pause className="h-12 w-12 text-white fill-current" />}
@@ -336,15 +389,21 @@ export default function Player() {
         </div>
       )}
 
+      {/* Controls overlay */}
       <div
         className={`absolute inset-0 transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
       >
+        {/* Gradient */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/60 pointer-events-none" />
 
-        <div className="absolute top-0 left-0 right-0 px-4 pt-4 pb-8 flex items-center gap-3">
+        {/* Top bar — stopPropagation prevents triggering center click */}
+        <div
+          className="absolute top-0 left-0 right-0 px-4 pt-4 pb-6 flex items-center gap-3 z-20"
+          onClick={e => e.stopPropagation()}
+        >
           <button
-            onClick={() => window.history.back()}
-            className="p-2.5 rounded-full bg-black/50 hover:bg-black/80 text-white transition-colors backdrop-blur-sm border border-white/10"
+            onClick={handleBack}
+            className="p-2.5 rounded-full bg-black/50 hover:bg-black/80 text-white transition-colors backdrop-blur-sm border border-white/10 flex-shrink-0"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -356,13 +415,24 @@ export default function Player() {
               )}
             </div>
           )}
+          {type === "tv" && seasons.length > 0 && (
+            <button
+              onClick={() => { setShowEpisodes(v => !v); setShowSettings(false); }}
+              className={`p-2 rounded-lg border transition-colors backdrop-blur-sm ${showEpisodes ? "bg-red-600 border-red-500 text-white" : "bg-black/50 border-white/10 text-white hover:bg-black/80"}`}
+              title="Episodes"
+            >
+              <List className="h-5 w-5" />
+            </button>
+          )}
           {currentResolution && (
-            <span className="text-xs font-bold text-white bg-red-600 px-2 py-0.5 rounded">{currentResolution}</span>
+            <span className="text-xs font-bold text-white bg-red-600 px-2 py-0.5 rounded flex-shrink-0">{currentResolution}</span>
           )}
         </div>
 
+        {/* Center click area (play/pause only — does NOT overlap top or bottom bars) */}
         <div
-          className="absolute inset-0 flex items-center justify-center"
+          className="absolute left-0 right-0"
+          style={{ top: "64px", bottom: "96px" }}
           onClick={togglePlay}
           onDoubleClick={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
@@ -371,22 +441,12 @@ export default function Player() {
           }}
         />
 
+        {/* Bottom controls — stopPropagation prevents triggering center click */}
         <div
-          className="absolute left-1/4 top-1/2 -translate-y-1/2 -translate-x-1/2 pointer-events-auto"
-          onDoubleClick={() => seek(-10)}
-          onClick={togglePlay}
+          className="absolute bottom-0 left-0 right-0 px-4 pb-6 pt-12 space-y-3 z-20"
+          onClick={e => e.stopPropagation()}
         >
-          <div className="w-24 h-24 rounded-full flex items-center justify-center bg-transparent" />
-        </div>
-        <div
-          className="absolute right-1/4 top-1/2 -translate-y-1/2 translate-x-1/2 pointer-events-auto"
-          onDoubleClick={() => seek(10)}
-          onClick={togglePlay}
-        >
-          <div className="w-24 h-24 rounded-full flex items-center justify-center bg-transparent" />
-        </div>
-
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-6 pt-12 space-y-3">
+          {/* Progress bar */}
           <div
             ref={progressRef}
             className="relative h-1.5 bg-white/20 rounded-full cursor-pointer group"
@@ -396,20 +456,15 @@ export default function Player() {
             onMouseLeave={() => setIsScrubbing(false)}
             onMouseMove={handleProgressMouseMove}
           >
-            <div
-              className="absolute inset-y-0 left-0 bg-white/30 rounded-full"
-              style={{ width: `${buffered}%` }}
-            />
-            <div
-              className="absolute inset-y-0 left-0 bg-red-500 rounded-full transition-all"
-              style={{ width: `${progressPct}%` }}
-            />
+            <div className="absolute inset-y-0 left-0 bg-white/30 rounded-full" style={{ width: `${buffered}%` }} />
+            <div className="absolute inset-y-0 left-0 bg-red-500 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
             <div
               className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity -ml-2"
               style={{ left: `${progressPct}%` }}
             />
           </div>
 
+          {/* Controls row */}
           <div className="flex items-center gap-2 md:gap-4">
             <button onClick={() => seek(-10)} className="text-white hover:text-red-400 transition-colors p-1" title="Back 10s">
               <RotateCcw className="h-5 w-5" />
@@ -427,12 +482,13 @@ export default function Player() {
             </button>
 
             <div className="text-white text-sm font-mono select-none whitespace-nowrap">
-              <span className="text-white">{formatTime(currentTime)}</span>
+              <span>{formatTime(currentTime)}</span>
               <span className="text-gray-400"> / {formatTime(duration)}</span>
             </div>
 
             <div className="flex-1" />
 
+            {/* Volume */}
             <div className="hidden sm:flex items-center gap-1.5 group/vol">
               <button onClick={toggleMute} className="text-white hover:text-red-400 transition-colors p-1">
                 {isMuted || volume === 0 ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
@@ -450,9 +506,10 @@ export default function Player() {
               </div>
             </div>
 
+            {/* Settings */}
             <div className="relative">
               <button
-                onClick={() => { setShowSettings(v => !v); setSettingsTab("speed"); }}
+                onClick={() => { setShowSettings(v => !v); setShowEpisodes(false); setSettingsTab("speed"); }}
                 className={`text-white hover:text-red-400 transition-colors p-1 ${showSettings ? "text-red-400" : ""}`}
                 title="Settings"
               >
@@ -460,9 +517,9 @@ export default function Player() {
               </button>
 
               {showSettings && (
-                <div className="absolute bottom-10 right-0 w-52 bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-xl overflow-hidden shadow-2xl">
+                <div className="absolute bottom-10 right-0 w-56 bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-xl overflow-hidden shadow-2xl">
                   <div className="flex border-b border-zinc-800">
-                    {(["speed", ...(hasStreams ? ["quality"] : [])] as const).map(tab => (
+                    {settingsTabs.map(tab => (
                       <button
                         key={tab}
                         onClick={() => setSettingsTab(tab as any)}
@@ -513,6 +570,32 @@ export default function Player() {
                         })}
                     </div>
                   )}
+
+                  {settingsTab === "subtitles" && hasSubtitles && (
+                    <div className="py-1">
+                      <button
+                        onClick={() => setActiveSubtitle("off")}
+                        className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${activeSubtitle === "off" ? "text-red-400 bg-zinc-800" : "text-gray-300 hover:bg-zinc-800 hover:text-white"}`}
+                      >
+                        <span>Off</span>
+                        {activeSubtitle === "off" && <Check className="h-4 w-4" />}
+                      </button>
+                      {rawSubtitles.map((sub: any, i: number) => {
+                        const label = sub.label || sub.language || sub.lang || `Subtitle ${i + 1}`;
+                        const isActive = activeSubtitle === label;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => setActiveSubtitle(label)}
+                            className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${isActive ? "text-red-400 bg-zinc-800" : "text-gray-300 hover:bg-zinc-800 hover:text-white"}`}
+                          >
+                            <span>{label}</span>
+                            {isActive && <Check className="h-4 w-4" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -523,6 +606,101 @@ export default function Player() {
           </div>
         </div>
       </div>
+
+      {/* Episodes panel */}
+      {showEpisodes && type === "tv" && seasons.length > 0 && (
+        <div
+          className="absolute inset-0 z-30 flex"
+          onClick={() => setShowEpisodes(false)}
+        >
+          <div className="flex-1" />
+          <div
+            className="w-full max-w-xs bg-zinc-950/98 backdrop-blur-lg border-l border-zinc-800 h-full flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-4 py-4 border-b border-zinc-800 flex-shrink-0">
+              <h3 className="text-white font-bold text-base">Episodes & Seasons</h3>
+              <button
+                onClick={() => setShowEpisodes(false)}
+                className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition-colors"
+              >
+                <X className="h-4 w-4 text-white" />
+              </button>
+            </div>
+
+            {/* Seasons list */}
+            <div className="flex-1 overflow-y-auto">
+              {seasons.map((s: SeasonItem, i: number) => {
+                const sNum = s.seasonNumber ?? s.season ?? (i + 1);
+                const epCount = s.episodes?.length || 0;
+                const isOpen = expandedSeason === i;
+
+                return (
+                  <div key={i} className="border-b border-zinc-800/60">
+                    <button
+                      onClick={() => setExpandedSeason(isOpen ? null : i)}
+                      className={`w-full flex items-center justify-between px-4 py-3.5 text-left transition-colors ${isOpen ? "bg-zinc-800" : "hover:bg-zinc-900"}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black transition-colors ${isOpen ? "bg-red-600 text-white" : "bg-zinc-700 text-gray-300"}`}>
+                          {sNum}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-white">Season {sNum}</p>
+                          {epCount > 0 && <p className="text-xs text-gray-500">{epCount} episode{epCount !== 1 ? "s" : ""}</p>}
+                        </div>
+                      </div>
+                      <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180 text-red-400" : ""}`} />
+                    </button>
+
+                    {isOpen && s.episodes && s.episodes.length > 0 && (
+                      <div className="bg-zinc-950/60">
+                        {s.episodes.map((ep: EpisodeItem, epIdx: number) => {
+                          const epNum = ep.episodeNumber ?? ep.episode ?? (epIdx + 1);
+                          const epTitle = ep.title ?? ep.name ?? `Episode ${epNum}`;
+                          const isCurrent = String(sNum) === season && String(epNum) === episode;
+
+                          return (
+                            <button
+                              key={epIdx}
+                              onClick={() => goToEpisode(sNum, epNum)}
+                              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors group ${isCurrent ? "bg-red-600/10 border-l-2 border-red-500" : "hover:bg-zinc-800/60"}`}
+                            >
+                              <div className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 group-hover:text-red-400"}`}>
+                                {epNum}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-xs font-medium truncate ${isCurrent ? "text-red-400" : "text-gray-300 group-hover:text-white"}`}>
+                                  {epTitle}
+                                </p>
+                                {ep.duration && (
+                                  <p className="text-xs text-gray-600">{Math.floor(ep.duration / 60)} min</p>
+                                )}
+                              </div>
+                              {isCurrent && (
+                                <div className="flex-shrink-0">
+                                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {isOpen && (!s.episodes || s.episodes.length === 0) && (
+                      <div className="py-6 text-center text-gray-500 text-xs bg-zinc-950/60">
+                        No episodes available
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes ping-once {
