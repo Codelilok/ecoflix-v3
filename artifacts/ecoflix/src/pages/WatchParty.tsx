@@ -176,6 +176,7 @@ export default function WatchParty() {
   const [countdownSecs, setCountdownSecs] = useState<number | null>(null);
   const [syncPending, setSyncPending] = useState(false);
 
+  const isHostRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -205,6 +206,7 @@ export default function WatchParty() {
           setPartyCode(msg.partyCode);
           setClientId(msg.clientId);
           setIsHost(msg.isHost);
+          isHostRef.current = msg.isHost;
           setAppPhase("lobby");
         } else if (msg.type === "error") {
           setError(msg.message);
@@ -224,7 +226,7 @@ export default function WatchParty() {
         } else if (msg.type === "ready_to_flip") {
           const g1: WatchPartyMovie[] = msg.group1 || [];
           const g2: WatchPartyMovie[] = msg.group2 || [];
-          if (isHost) {
+          if (isHostRef.current) {
             setTimeout(() => {
               const hostWins = Math.random() < 0.5;
               const ordered = hostWins ? [...g1, ...g2] : [...g2, ...g1];
