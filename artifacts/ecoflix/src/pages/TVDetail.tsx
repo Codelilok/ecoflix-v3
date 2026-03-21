@@ -144,10 +144,6 @@ function ManualEpisodePicker({ onSelect }: { onSelect: (season: number, ep: numb
 
   return (
     <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl px-6 py-6 max-w-sm">
-      <p className="text-gray-400 text-sm mb-5 leading-relaxed">
-        No episode list is available for this series. Pick a season and episode to watch:
-      </p>
-
       <div className="grid grid-cols-2 gap-4 mb-6">
         {/* Season picker */}
         <div>
