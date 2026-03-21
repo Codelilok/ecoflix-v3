@@ -7,8 +7,14 @@ import { MediaItem } from "@/lib/api-types";
 import {
   Users, Plus, ArrowRight, Copy, Check, RefreshCw, Play, Pause,
   Volume2, VolumeX, Send, X, ChevronLeft, PartyPopper, Shuffle,
-  SkipForward, Star, Coins, Crown,
+  SkipForward, Star, Coins, Crown, Tv, ChevronDown, Loader2,
 } from "lucide-react";
+
+const API_BASE = "https://movieapi.xcasper.space/api";
+const API_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "application/json",
+};
 
 /* ─── Types ─── */
 interface WatchPartyMovie {
@@ -18,6 +24,14 @@ interface WatchPartyMovie {
   poster: string;
   year?: string;
   rating?: string;
+  season?: string;
+  episode?: string;
+  episodeTitle?: string;
+}
+
+interface StreamOption {
+  url: string;
+  label: string;
 }
 
 interface PartyMember {
@@ -86,32 +100,178 @@ function CoinFlip({ winner, onDone }: { winner: WatchPartyMovie; onDone: () => v
   );
 }
 
+/* ─── Episode Picker for TV Shows ─── */
+function WatchPartyEpisodePicker({
+  item,
+  onConfirm,
+  onClose,
+}: {
+  item: MediaItem;
+  onConfirm: (movie: WatchPartyMovie) => void;
+  onClose: () => void;
+}) {
+  const title = getTitle(item);
+  const poster = getPoster(item);
+  const [detail, setDetail] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedSeason, setSelectedSeason] = useState<number>(1);
+  const [selectedEpisode, setSelectedEpisode] = useState<number>(1);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${API_BASE}/detail?subjectId=${encodeURIComponent(item.subjectId)}`, { headers: API_HEADERS })
+      .then((r) => r.json())
+      .then((json) => {
+        const d = json?.data?.subject || json?.data || null;
+        const resource = json?.data?.resource || [];
+        setDetail({ ...d, resource });
+        const firstSeason = resource[0]?.seasonNumber || resource[0]?.season || 1;
+        setSelectedSeason(Number(firstSeason));
+        setSelectedEpisode(1);
+      })
+      .catch(() => setDetail(null))
+      .finally(() => setLoading(false));
+  }, [item.subjectId]);
+
+  const seasons: any[] = detail?.resource || [];
+  const currentSeason = seasons.find(
+    (s) => Number(s.seasonNumber || s.season) === selectedSeason
+  ) || seasons[0];
+  const episodes: any[] = currentSeason?.episodes || [];
+
+  const handleConfirm = () => {
+    const ep = episodes.find(
+      (e) => Number(e.episodeNumber || e.episode) === selectedEpisode
+    ) || episodes[0];
+    const epNum = ep ? Number(ep.episodeNumber || ep.episode) : selectedEpisode;
+    const epTitle = ep?.title || ep?.name || `Episode ${epNum}`;
+    onConfirm({
+      id: item.subjectId,
+      type: "tv",
+      title,
+      poster: poster || "",
+      year: getYear(item) || "",
+      season: String(selectedSeason),
+      episode: String(epNum),
+      episodeTitle: epTitle,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
+      <div
+        className="relative bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-zinc-800">
+          <div className="flex items-center gap-3">
+            {poster && <img src={poster} alt={title} className="w-10 h-14 object-cover rounded-lg flex-shrink-0" />}
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wider font-medium flex items-center gap-1">
+                <Tv className="h-3 w-3" /> TV Series
+              </p>
+              <h3 className="text-white font-bold text-sm mt-0.5 line-clamp-2">{title}</h3>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center flex-shrink-0 ml-2">
+            <X className="h-4 w-4 text-white" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-7 w-7 animate-spin text-red-500" />
+            </div>
+          ) : seasons.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-4">No episode data available</p>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider block mb-2">Season</label>
+                <div className="relative">
+                  <select
+                    value={selectedSeason}
+                    onChange={(e) => { setSelectedSeason(Number(e.target.value)); setSelectedEpisode(1); }}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-red-500 text-sm"
+                  >
+                    {seasons.map((s, i) => {
+                      const sNum = Number(s.seasonNumber || s.season || i + 1);
+                      return <option key={i} value={sNum}>Season {sNum}</option>;
+                    })}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider block mb-2">Episode</label>
+                <div className="relative">
+                  <select
+                    value={selectedEpisode}
+                    onChange={(e) => setSelectedEpisode(Number(e.target.value))}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-red-500 text-sm"
+                  >
+                    {episodes.map((ep, i) => {
+                      const epNum = Number(ep.episodeNumber || ep.episode || i + 1);
+                      const epTitle = ep.title || ep.name || `Episode ${epNum}`;
+                      return <option key={i} value={epNum}>Ep {epNum} — {epTitle}</option>;
+                    })}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <button
+                onClick={handleConfirm}
+                className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
+              >
+                <Check className="h-4 w-4" /> Add to My Queue
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Movie Card ─── */
 function MoviePickCard({
   item,
   selected,
   onSelect,
+  onOpenEpisodePicker,
 }: {
   item: MediaItem;
   selected: boolean;
   onSelect: (movie: WatchPartyMovie) => void;
+  onOpenEpisodePicker: (item: MediaItem) => void;
 }) {
   const title = getTitle(item);
   const poster = getPoster(item);
   const year = getYear(item);
+  const isTv = Number(item.subjectType) === 2;
+
+  const handleClick = () => {
+    if (isTv) {
+      onOpenEpisodePicker(item);
+    } else {
+      onSelect({
+        id: item.subjectId,
+        type: "movie",
+        title,
+        poster: poster || "",
+        year: year || "",
+        rating: item.imdbRatingValue || "",
+      });
+    }
+  };
 
   return (
     <button
-      onClick={() =>
-        onSelect({
-          id: item.subjectId,
-          type: item.subjectType || "movie",
-          title,
-          poster: poster || "",
-          year: year || "",
-          rating: item.imdbRatingValue || "",
-        })
-      }
+      onClick={handleClick}
       className={`relative rounded-xl overflow-hidden transition-all duration-200 active:scale-95 group ${selected ? "ring-4 ring-red-500 scale-105" : "hover:scale-102"}`}
     >
       <div className="aspect-[2/3] bg-zinc-800">
@@ -124,6 +284,11 @@ function MoviePickCard({
         )}
       </div>
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
+      {isTv && !selected && (
+        <div className="absolute top-2 left-2 bg-blue-600/80 rounded px-1.5 py-0.5">
+          <span className="text-white text-[9px] font-bold">TV</span>
+        </div>
+      )}
       {selected && (
         <div className="absolute top-2 right-2 bg-red-500 rounded-full p-1">
           <Check className="h-3 w-3 text-white" />
@@ -177,6 +342,11 @@ export default function WatchParty() {
   const [syncPending, setSyncPending] = useState(false);
   const [currentStreamUrl, setCurrentStreamUrl] = useState<string>("");
   const [streamLoading, setStreamLoading] = useState(false);
+  const [availableStreams, setAvailableStreams] = useState<StreamOption[]>([]);
+  const [qualityPicked, setQualityPicked] = useState(false);
+  const [episodePickerItem, setEpisodePickerItem] = useState<MediaItem | null>(null);
+
+  const pendingPlayRef = useRef<{ playing: boolean; time: number } | null>(null);
 
   const isHostRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -259,7 +429,11 @@ export default function WatchParty() {
           }
         } else if (msg.type === "playback") {
           const video = videoRef.current;
-          if (!video) return;
+          if (!video) { pendingPlayRef.current = { playing: msg.playing, time: msg.time }; return; }
+          if (video.readyState < 2) {
+            pendingPlayRef.current = { playing: msg.playing, time: msg.time };
+            return;
+          }
           const drift = Math.abs(video.currentTime - msg.time);
           if (drift > 1) video.currentTime = msg.time;
           if (msg.playing && video.paused) {
@@ -442,13 +616,27 @@ export default function WatchParty() {
     };
     const onTimeUpdate = () => setCurrentTime(video.currentTime);
     const onDuration = () => setDuration(video.duration);
+    const onCanPlay = () => {
+      const pending = pendingPlayRef.current;
+      if (pending) {
+        pendingPlayRef.current = null;
+        const drift = Math.abs(video.currentTime - pending.time);
+        if (drift > 1) video.currentTime = pending.time;
+        if (pending.playing && video.paused) {
+          video.play().catch(() => {});
+          setIsPlaying(true);
+        }
+      }
+    };
     video.addEventListener("ended", onEnded);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("durationchange", onDuration);
+    video.addEventListener("canplay", onCanPlay);
     return () => {
       video.removeEventListener("ended", onEnded);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("durationchange", onDuration);
+      video.removeEventListener("canplay", onCanPlay);
     };
   }, [appPhase, partyState, sendWS]);
 
@@ -466,24 +654,35 @@ export default function WatchParty() {
   useEffect(() => {
     if (!currentMovieForFetch?.id || (appPhase !== "watching" && appPhase !== "between")) return;
     setCurrentStreamUrl("");
+    setAvailableStreams([]);
+    setQualityPicked(false);
     setStreamLoading(true);
-    const BASE_URL = "https://movieapi.xcasper.space/api";
-    fetch(`${BASE_URL}/play?subjectId=${encodeURIComponent(currentMovieForFetch.id)}`, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-      },
-    })
+    pendingPlayRef.current = null;
+    const isTv = currentMovieForFetch.type === "tv" || Number(currentMovieForFetch.type) === 2;
+    const qs = isTv && currentMovieForFetch.season && currentMovieForFetch.episode
+      ? `subjectId=${encodeURIComponent(currentMovieForFetch.id)}&se=${encodeURIComponent(currentMovieForFetch.season)}&ep=${encodeURIComponent(currentMovieForFetch.episode)}`
+      : `subjectId=${encodeURIComponent(currentMovieForFetch.id)}`;
+    fetch(`${API_BASE}/play?${qs}`, { headers: API_HEADERS })
       .then((r) => r.json())
       .then((json) => {
-        const streams = json?.data?.streams || [];
-        const best = streams[0];
-        const url = best?.proxyUrl || best?.url || "";
-        setCurrentStreamUrl(url);
+        const streams: any[] = json?.data?.streams || [];
+        if (streams.length === 0) { setCurrentStreamUrl(""); return; }
+        const options: StreamOption[] = streams
+          .map((s, i) => ({
+            url: s.proxyUrl || s.url || "",
+            label: s.resolutions ? `${s.resolutions}p` : s.format ? s.format.toUpperCase() : `Quality ${i + 1}`,
+          }))
+          .filter((o) => o.url);
+        if (options.length <= 1) {
+          setCurrentStreamUrl(options[0]?.url || "");
+          setQualityPicked(true);
+        } else {
+          setAvailableStreams(options);
+        }
       })
       .catch(() => setCurrentStreamUrl(""))
       .finally(() => setStreamLoading(false));
-  }, [currentMovieForFetch?.id, appPhase]);
+  }, [currentMovieForFetch?.id, currentMovieForFetch?.season, currentMovieForFetch?.episode, appPhase]);
 
   const currentMovie = partyState?.movies?.[partyState?.currentMovieIdx || 0];
   const members = partyState?.members || [];
@@ -671,7 +870,12 @@ export default function WatchParty() {
                 {selectedMovies.map((m) => (
                   <div key={m.id} className="flex items-center gap-2">
                     {m.poster && <img src={m.poster} alt={m.title} className="w-8 h-11 object-cover rounded" />}
-                    <span className="text-gray-300 text-xs">{m.title}</span>
+                    <div className="flex flex-col">
+                      <span className="text-gray-300 text-xs">{m.title}</span>
+                      {m.season && m.episode && (
+                        <span className="text-gray-500 text-[10px]">S{m.season}E{m.episode}</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -686,7 +890,12 @@ export default function WatchParty() {
                       <div key={m.id} className="flex items-center gap-1.5">
                         <span className="text-gray-500 text-xs font-bold">#{idx + 1}</span>
                         {m.poster && <img src={m.poster} alt={m.title} className="w-8 h-11 object-cover rounded" />}
-                        <span className="text-gray-300 text-xs max-w-[70px] line-clamp-2">{m.title}</span>
+                        <div className="flex flex-col">
+                          <span className="text-gray-300 text-xs max-w-[70px] line-clamp-1">{m.title}</span>
+                          {m.season && m.episode && (
+                            <span className="text-gray-500 text-[10px]">S{m.season}E{m.episode}</span>
+                          )}
+                        </div>
                       </div>
                     ))}
                     <span className="text-gray-600 text-xs">{selectedMovies.length}/2 selected</span>
@@ -713,9 +922,21 @@ export default function WatchParty() {
                 item={item}
                 selected={selectedMovies.some((m) => m.id === item.subjectId)}
                 onSelect={selectionConfirmed ? () => {} : handleMovieToggle}
+                onOpenEpisodePicker={selectionConfirmed ? () => {} : (it) => setEpisodePickerItem(it)}
               />
             ))}
           </div>
+
+          {episodePickerItem && (
+            <WatchPartyEpisodePicker
+              item={episodePickerItem}
+              onConfirm={(movie) => {
+                handleMovieToggle(movie);
+                setEpisodePickerItem(null);
+              }}
+              onClose={() => setEpisodePickerItem(null)}
+            />
+          )}
 
           <div className="mt-6 flex justify-center">
             <button onClick={handleLeave} className="text-gray-500 hover:text-red-400 text-sm transition-colors">
@@ -879,10 +1100,32 @@ export default function WatchParty() {
                     <RefreshCw className="h-10 w-10 animate-spin text-red-500" />
                     <p className="text-gray-400 text-sm">Loading stream for <span className="text-white font-semibold">{currentMovie.title}</span>...</p>
                   </div>
+                ) : availableStreams.length > 0 && !qualityPicked ? (
+                  <div className="flex flex-col items-center gap-5 p-6 w-full max-w-xs">
+                    <div className="text-center">
+                      <p className="text-white font-bold text-base">{currentMovie.title}</p>
+                      {currentMovie.season && currentMovie.episode && (
+                        <p className="text-gray-400 text-sm mt-0.5">Season {currentMovie.season} · Episode {currentMovie.episode}</p>
+                      )}
+                      <p className="text-gray-400 text-sm mt-2">Pick your stream quality</p>
+                    </div>
+                    <div className="w-full space-y-2">
+                      {availableStreams.map((s, i) => (
+                        <button
+                          key={i}
+                          onClick={() => { setCurrentStreamUrl(s.url); setQualityPicked(true); }}
+                          className="w-full flex items-center justify-between px-5 py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-red-500 rounded-xl transition-colors"
+                        >
+                          <span className="text-white font-bold text-sm">{s.label}</span>
+                          <Play className="h-4 w-4 text-red-400 fill-current" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ) : currentStreamUrl ? (
                   <video
                     ref={videoRef}
-                    key={currentMovie.id}
+                    key={`${currentMovie.id}-${currentStreamUrl}`}
                     src={currentStreamUrl}
                     className="max-h-full max-w-full"
                     playsInline
@@ -1063,7 +1306,7 @@ export default function WatchParty() {
                   setAppPhase("entry");
                   setPartyState(null);
                   setPartyCode("");
-                  setSelectedMovie(null);
+                  setSelectedMovies([]);
                   setFlipMovies([]);
                   setChatMessages([]);
                   setName("");
