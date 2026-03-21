@@ -58,8 +58,8 @@ function CoinFlip({ winner, onDone }: { winner: WatchPartyMovie; onDone: () => v
   useEffect(() => {
     const t = setTimeout(() => {
       setFlipping(false);
-      setTimeout(onDone, 1200);
-    }, 2500);
+      setTimeout(onDone, 600);
+    }, 1000);
     return () => clearTimeout(t);
   }, [onDone]);
 
@@ -159,8 +159,10 @@ export default function WatchParty() {
   const [partyState, setPartyState] = useState<PartyStateData | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const [selectedMovie, setSelectedMovie] = useState<WatchPartyMovie | null>(null);
+  const [selectedMovies, setSelectedMovies] = useState<WatchPartyMovie[]>([]);
+  const [selectionConfirmed, setSelectionConfirmed] = useState(false);
   const [flipMovies, setFlipMovies] = useState<WatchPartyMovie[]>([]);
+  const [flipSplit, setFlipSplit] = useState(0);
   const [flipWinner, setFlipWinner] = useState<WatchPartyMovie | null>(null);
   const [showCoinFlip, setShowCoinFlip] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -220,23 +222,26 @@ export default function WatchParty() {
         } else if (msg.type === "phase_change") {
           if (msg.phase === "selecting") setAppPhase("selecting");
         } else if (msg.type === "ready_to_flip") {
-          setFlipMovies(msg.movies);
+          const g1: WatchPartyMovie[] = msg.group1 || [];
+          const g2: WatchPartyMovie[] = msg.group2 || [];
           if (isHost) {
             setTimeout(() => {
-              const movies: WatchPartyMovie[] = msg.movies;
-              const winnerIdx = Math.random() < 0.5 ? 0 : 1;
-              const ordered = [movies[winnerIdx], movies[1 - winnerIdx]];
-              setFlipWinner(ordered[0]);
+              const hostWins = Math.random() < 0.5;
+              const ordered = hostWins ? [...g1, ...g2] : [...g2, ...g1];
+              const split = hostWins ? g1.length : g2.length;
               setFlipMovies(ordered);
+              setFlipSplit(split);
+              setFlipWinner(ordered[0]);
               setShowCoinFlip(true);
               setAppPhase("flipping");
-              sendWS({ type: "flip_result", movies: ordered });
-            }, 500);
+              sendWS({ type: "flip_result", movies: ordered, split });
+            }, 300);
           } else {
             setAppPhase("flipping");
           }
         } else if (msg.type === "flip_result") {
           setFlipMovies(msg.movies);
+          setFlipSplit(msg.split ?? 1);
           setFlipWinner(msg.movies[0]);
           setShowCoinFlip(true);
           setAppPhase("flipping");
@@ -294,9 +299,20 @@ export default function WatchParty() {
     });
   };
 
-  const handleMovieSelect = (movie: WatchPartyMovie) => {
-    setSelectedMovie(movie);
-    sendWS({ type: "select_movie", movie });
+  const handleMovieToggle = (movie: WatchPartyMovie) => {
+    if (selectionConfirmed) return;
+    setSelectedMovies((prev) => {
+      const alreadyIn = prev.some((m) => m.id === movie.id);
+      if (alreadyIn) return prev.filter((m) => m.id !== movie.id);
+      if (prev.length >= 2) return prev;
+      return [...prev, movie];
+    });
+  };
+
+  const handleConfirmSelection = () => {
+    if (selectedMovies.length === 0 || selectionConfirmed) return;
+    setSelectionConfirmed(true);
+    sendWS({ type: "select_movies", movies: selectedMovies });
   };
 
   const handleFlipDone = () => {
@@ -306,22 +322,29 @@ export default function WatchParty() {
 
   const handleSwap = () => {
     if (!isHost) return;
-    const swapped = [flipMovies[1], flipMovies[0]];
+    const group1 = flipMovies.slice(0, flipSplit);
+    const group2 = flipMovies.slice(flipSplit);
+    const swapped = [...group2, ...group1];
+    const newSplit = group2.length;
     setFlipMovies(swapped);
+    setFlipSplit(newSplit);
     setFlipWinner(swapped[0]);
-    sendWS({ type: "swap_movies" });
+    sendWS({ type: "flip_result", movies: swapped, split: newSplit });
   };
 
   const handleReflip = () => {
     if (!isHost) return;
-    const winnerIdx = Math.random() < 0.5 ? 0 : 1;
-    const ordered = [...flipMovies];
-    if (winnerIdx === 1) ordered.reverse();
+    const group1 = flipMovies.slice(0, flipSplit);
+    const group2 = flipMovies.slice(flipSplit);
+    const g1Wins = Math.random() < 0.5;
+    const ordered = g1Wins ? [...group1, ...group2] : [...group2, ...group1];
+    const newSplit = g1Wins ? group1.length : group2.length;
     setFlipMovies(ordered);
+    setFlipSplit(newSplit);
     setFlipWinner(ordered[0]);
     setShowCoinFlip(true);
     setAppPhase("flipping");
-    sendWS({ type: "flip_result", movies: ordered });
+    sendWS({ type: "flip_result", movies: ordered, split: newSplit });
   };
 
   const handleStartWatching = () => {
@@ -599,8 +622,8 @@ export default function WatchParty() {
         <div className="pt-20 pb-10 px-4 md:px-8 max-w-screen-xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-black text-white">Pick Your Movie</h2>
-              <p className="text-gray-400 text-sm mt-0.5">Choose secretly — your partner won't see your pick!</p>
+              <h2 className="text-2xl font-black text-white">Pick Your Movies</h2>
+              <p className="text-gray-400 text-sm mt-0.5">Choose up to 2 movies secretly — your partner won't see your picks!</p>
             </div>
             <div className="flex items-center gap-2">
               {members.map((m) => (
@@ -612,21 +635,46 @@ export default function WatchParty() {
             </div>
           </div>
 
-          {selectedMovie && (
-            <div className="mb-6 bg-green-600/10 border border-green-600/30 rounded-xl p-4 flex items-center gap-3">
-              {selectedMovie.poster && (
-                <img src={selectedMovie.poster} alt={selectedMovie.title} className="w-10 h-14 object-cover rounded-lg" />
-              )}
-              <div>
-                <p className="text-green-400 font-bold text-sm">You picked: {selectedMovie.title}</p>
-                <p className="text-gray-400 text-xs mt-0.5">{allSelected ? "Both picked! Coin flip starting soon..." : "Waiting for your partner..."}</p>
+          {/* Selection status bar */}
+          {selectionConfirmed ? (
+            <div className="mb-6 bg-green-600/10 border border-green-600/30 rounded-xl p-4">
+              <p className="text-green-400 font-bold text-sm mb-2">Your picks are locked in!</p>
+              <div className="flex gap-3 flex-wrap">
+                {selectedMovies.map((m) => (
+                  <div key={m.id} className="flex items-center gap-2">
+                    {m.poster && <img src={m.poster} alt={m.title} className="w-8 h-11 object-cover rounded" />}
+                    <span className="text-gray-300 text-xs">{m.title}</span>
+                  </div>
+                ))}
               </div>
+              <p className="text-gray-400 text-xs mt-2">{allSelected ? "Both picked! Coin flip starting soon..." : "Waiting for your partner..."}</p>
             </div>
-          )}
-
-          {!selectedMovie && (
-            <div className="mb-4 text-center py-4 bg-zinc-900/50 border border-zinc-800 border-dashed rounded-xl">
-              <p className="text-gray-400 text-sm">Tap a movie to select it</p>
+          ) : (
+            <div className="mb-4">
+              {selectedMovies.length > 0 ? (
+                <div className="bg-zinc-900/80 border border-zinc-700 rounded-xl p-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {selectedMovies.map((m, idx) => (
+                      <div key={m.id} className="flex items-center gap-1.5">
+                        <span className="text-gray-500 text-xs font-bold">#{idx + 1}</span>
+                        {m.poster && <img src={m.poster} alt={m.title} className="w-8 h-11 object-cover rounded" />}
+                        <span className="text-gray-300 text-xs max-w-[70px] line-clamp-2">{m.title}</span>
+                      </div>
+                    ))}
+                    <span className="text-gray-600 text-xs">{selectedMovies.length}/2 selected</span>
+                  </div>
+                  <button
+                    onClick={handleConfirmSelection}
+                    className="flex-shrink-0 bg-green-600 hover:bg-green-500 text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Confirm
+                  </button>
+                </div>
+              ) : (
+                <div className="mb-1 text-center py-3 bg-zinc-900/50 border border-zinc-800 border-dashed rounded-xl">
+                  <p className="text-gray-400 text-sm">Tap up to 2 movies to add them to your queue</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -635,8 +683,8 @@ export default function WatchParty() {
               <MoviePickCard
                 key={item.subjectId}
                 item={item}
-                selected={selectedMovie?.id === item.subjectId}
-                onSelect={handleMovieSelect}
+                selected={selectedMovies.some((m) => m.id === item.subjectId)}
+                onSelect={selectionConfirmed ? () => {} : handleMovieToggle}
               />
             ))}
           </div>

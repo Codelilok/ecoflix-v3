@@ -19,7 +19,7 @@ interface PartyMember {
   id: string;
   name: string;
   ws: WebSocket;
-  movieSelection?: WatchPartyMovie;
+  movieSelection?: WatchPartyMovie[];
 }
 
 interface WatchPartyMovie {
@@ -75,7 +75,7 @@ function sendPartyState(party: PartyState): void {
   const safeMembers = party.members.map((m) => ({
     id: m.id,
     name: m.name,
-    hasSelected: !!m.movieSelection,
+    hasSelected: !!(m.movieSelection && m.movieSelection.length > 0),
   }));
   broadcastToAll(party, {
     type: "party_state",
@@ -141,19 +141,20 @@ wss.on("connection", (ws) => {
           broadcastToAll(party, { type: "phase_change", phase: "selecting" });
           sendPartyState(party);
         }
-      } else if (msg.type === "select_movie" && currentPartyCode) {
+      } else if (msg.type === "select_movies" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         const member = party.members.find((m) => m.id === clientId);
         if (!member) return;
-        member.movieSelection = msg.movie;
+        member.movieSelection = Array.isArray(msg.movies) ? msg.movies.slice(0, 2) : [];
         sendPartyState(party);
-        const allSelected = party.members.length === 2 && party.members.every((m) => m.movieSelection);
+        const allSelected = party.members.length === 2 && party.members.every((m) => m.movieSelection && m.movieSelection.length > 0);
         if (allSelected) {
           party.phase = "flipping";
           broadcastToAll(party, {
             type: "ready_to_flip",
-            movies: party.members.map((m) => m.movieSelection!),
+            group1: party.members[0].movieSelection!,
+            group2: party.members[1].movieSelection!,
           });
           sendPartyState(party);
         }

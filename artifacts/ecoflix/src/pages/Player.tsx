@@ -329,7 +329,6 @@ export default function Player() {
   }, [id, type, setLocation]);
 
   const streamEpisode = useCallback((seasonNum: number, epNum: number, stream?: Stream) => {
-    setSelectedEp(null);
     setShowEpisodes(false);
     historyLoggedRef.current = false;
     const streamParam = stream ? `&streamUrl=${encodeURIComponent(stream.proxyUrl || stream.url)}` : "";

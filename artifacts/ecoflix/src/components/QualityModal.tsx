@@ -65,6 +65,15 @@ export function QualityModal({
   const safeFilename = displayTitle.replace(/[^a-z0-9\s\-_.]/gi, "").trim();
   const hasSubtitles = subtitles.length > 0;
 
+  // For subtitle filename: use S1E2 format instead of long episodeLabel
+  const episodeCode = episodeLabel ? (() => {
+    const m = episodeLabel.match(/Season\s*(\d+)[^0-9]*(\d+)/i);
+    return m ? `S${m[1]}E${m[2]}` : null;
+  })() : null;
+  const subtitleFilename = (episodeCode
+    ? `${title.replace(/[^a-z0-9\s\-_.]/gi, "").trim()} ${episodeCode}`
+    : safeFilename);
+
   const handleQualitySelect = (stream: Stream) => {
     if (mode === "stream") {
       if (onSelectStream) onSelectStream(stream);
@@ -99,7 +108,7 @@ export function QualityModal({
     if (subUrl) {
       setTimeout(() => {
         const label = sub.label || sub.language || sub.lang || "subtitle";
-        triggerDownload(subUrl, `${safeFilename}.${label}.vtt`);
+        triggerDownload(subUrl, `${subtitleFilename}.${label}.vtt`);
       }, 500);
     }
     onClose();
