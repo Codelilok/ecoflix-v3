@@ -9,16 +9,17 @@ interface MediaCardProps {
   className?: string;
   showProgress?: number;
   onRemove?: (id: string) => void;
+  hrefOverride?: string;
 }
 
-export function MediaCard({ item, className, showProgress, onRemove }: MediaCardProps) {
+export function MediaCard({ item, className, showProgress, onRemove, hrefOverride }: MediaCardProps) {
   const [imageError, setImageError] = useState(false);
   const title = getTitle(item);
   const type = getType(item);
   const year = getYear(item);
   const rating = (item as any).imdbRatingValue || (item as any).rating || null;
   const posterUrl = imageError ? '' : getPoster(item);
-  const detailUrl = `/${type}/${item.subjectId}`;
+  const detailUrl = hrefOverride || `/${type}/${item.subjectId}`;
 
   return (
     <div className={cn("group relative flex-shrink-0 cursor-pointer overflow-hidden rounded-md bg-zinc-900 transition-all duration-300 hover:scale-105 hover:z-10 hover:shadow-2xl", className)}>

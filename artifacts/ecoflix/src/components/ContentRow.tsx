@@ -11,9 +11,10 @@ interface ContentRowProps {
   showMoreHref?: string;
   onRemove?: (id: string) => void;
   maxItems?: number;
+  linkBuilder?: (item: MediaItem) => string;
 }
 
-export function ContentRow({ title, items, progressMap = {}, showMoreHref, onRemove, maxItems = 10 }: ContentRowProps) {
+export function ContentRow({ title, items, progressMap = {}, showMoreHref, onRemove, maxItems = 10, linkBuilder }: ContentRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
 
   const scroll = useCallback((direction: 'left' | 'right') => {
@@ -81,6 +82,7 @@ export function ContentRow({ title, items, progressMap = {}, showMoreHref, onRem
                 item={item}
                 showProgress={progressMap[item.subjectId]}
                 onRemove={onRemove}
+                hrefOverride={linkBuilder ? linkBuilder(item) : undefined}
               />
             </div>
           ))}

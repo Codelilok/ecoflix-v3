@@ -57,6 +57,13 @@ export default function Home() {
             items={continueItems}
             progressMap={progressMap}
             onRemove={removeFromContinueWatching}
+            linkBuilder={(item) => {
+              const c = continueList.find(c => String(c.id) === item.subjectId);
+              if (!c) return `/${item.subjectType === 2 ? 'tv' : 'movie'}/${item.subjectId}`;
+              const seasonParam = c.season ? `&season=${c.season}` : '';
+              const epParam = c.episode ? `&episode=${c.episode}` : '';
+              return `/player?id=${c.id}&type=${c.type}${seasonParam}${epParam}`;
+            }}
           />
         )}
 

@@ -227,6 +227,7 @@ export default function TVDetail() {
   const isSaved = isInWishlist(show.subjectId);
   const seasons = show.resource || [];
   const hasSeasons = seasons.length > 0;
+  const totalEpisodes = seasons.reduce((sum, s) => sum + (s.episodes?.length || 0), 0);
 
   return (
     <Layout>
@@ -259,8 +260,10 @@ export default function TVDetail() {
                   </span>
                 )}
                 {year && <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> {year}</span>}
+                {show.countryName && <span className="flex items-center gap-1 text-gray-300">{show.countryName}</span>}
                 <span className="px-2 py-0.5 border border-gray-600 rounded text-xs uppercase font-bold bg-black/40">TV Series</span>
                 {hasSeasons && <span className="text-gray-400">{seasons.length} Season{seasons.length !== 1 ? "s" : ""}</span>}
+                {totalEpisodes > 0 && <span className="text-gray-400">{totalEpisodes} Episode{totalEpisodes !== 1 ? "s" : ""}</span>}
               </div>
 
               {genres.length > 0 && (

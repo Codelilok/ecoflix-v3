@@ -7,7 +7,7 @@ import { Stream, EpisodeItem, SeasonItem } from "@/lib/api-types";
 import {
   ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   RotateCcw, RotateCw, Settings, Loader2, AlertCircle, Check,
-  List, ChevronDown, X, Download,
+  List, ChevronDown, X, Download, Minus,
 } from "lucide-react";
 
 /* ─── helpers ─── */
@@ -235,6 +235,8 @@ export default function Player() {
   const [showEpisodes, setShowEpisodes] = useState(false);
   const [expandedSeason, setExpandedSeason] = useState<number | null>(0);
   const [selectedEp, setSelectedEp] = useState<{ seasonNum: number; epNum: number; epTitle: string } | null>(null);
+  const [manualSeason, setManualSeason] = useState(Number(season) || 1);
+  const [manualEp, setManualEp] = useState(Number(episode) || 1);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -600,7 +602,7 @@ export default function Player() {
                 )}
               </div>
             )}
-            {type === "tv" && seasons.length > 0 && (
+            {type === "tv" && (
               <button
                 onClick={() => { setShowEpisodes(v => !v); setShowSettings(false); }}
                 className={`p-2 rounded-lg border transition-colors backdrop-blur-sm ${showEpisodes ? "bg-red-600 border-red-500 text-white" : "bg-black/50 border-white/10 text-white hover:bg-black/80"}`}
@@ -771,7 +773,7 @@ export default function Player() {
       )}
 
       {/* ── Episodes side panel ── */}
-      {showEpisodes && type === "tv" && seasons.length > 0 && (
+      {showEpisodes && type === "tv" && (
         <div className="absolute inset-0 z-30 flex" onClick={() => setShowEpisodes(false)}>
           <div className="flex-1" />
           <div
@@ -786,64 +788,122 @@ export default function Player() {
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {seasons.map((s: SeasonItem, i: number) => {
-                const sNum = s.seasonNumber ?? s.season ?? (i + 1);
-                const epCount = s.episodes?.length || 0;
-                const isOpen = expandedSeason === i;
+              {seasons.length === 0 ? (
+                /* Manual picker when no season data available */
+                <div className="p-5">
+                  <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-4">Pick an episode</p>
 
-                return (
-                  <div key={i} className="border-b border-zinc-800/60">
-                    <button
-                      onClick={() => setExpandedSeason(isOpen ? null : i)}
-                      className={`w-full flex items-center justify-between px-4 py-3.5 text-left transition-colors ${isOpen ? "bg-zinc-800" : "hover:bg-zinc-900"}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black ${isOpen ? "bg-red-600 text-white" : "bg-zinc-700 text-gray-300"}`}>
-                          {sNum}
-                        </div>
-                        <p className="text-sm font-semibold text-white">Season {sNum}</p>
+                  <div className="space-y-4 mb-5">
+                    <div>
+                      <p className="text-xs text-gray-400 font-semibold mb-2">Season</p>
+                      <div className="flex items-center gap-3 bg-zinc-800 rounded-xl px-3 py-2.5 border border-zinc-700">
+                        <button
+                          onClick={() => setManualSeason(Math.max(1, manualSeason - 1))}
+                          className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0"
+                        >
+                          <Minus className="h-3.5 w-3.5 text-white" />
+                        </button>
+                        <span className="flex-1 text-center text-white font-black text-2xl">{manualSeason}</span>
+                        <button
+                          onClick={() => setManualSeason(manualSeason + 1)}
+                          className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0 text-white font-bold text-lg"
+                        >
+                          +
+                        </button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {epCount > 0 && <span className="text-xs text-gray-500">{epCount} ep</span>}
-                        <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180 text-red-400" : ""}`} />
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-gray-400 font-semibold mb-2">Episode</p>
+                      <div className="flex items-center gap-3 bg-zinc-800 rounded-xl px-3 py-2.5 border border-zinc-700">
+                        <button
+                          onClick={() => setManualEp(Math.max(1, manualEp - 1))}
+                          className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0"
+                        >
+                          <Minus className="h-3.5 w-3.5 text-white" />
+                        </button>
+                        <span className="flex-1 text-center text-white font-black text-2xl">{manualEp}</span>
+                        <button
+                          onClick={() => setManualEp(manualEp + 1)}
+                          className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0 text-white font-bold text-lg"
+                        >
+                          +
+                        </button>
                       </div>
-                    </button>
-
-                    {isOpen && s.episodes && s.episodes.length > 0 && (
-                      <div className="bg-zinc-950/60">
-                        {s.episodes.map((ep: EpisodeItem, epIdx: number) => {
-                          const epNum = ep.episodeNumber ?? ep.episode ?? (epIdx + 1);
-                          const epTitle = ep.title ?? ep.name ?? `Episode ${epNum}`;
-                          const isCurrent = String(sNum) === season && String(epNum) === episode;
-
-                          return (
-                            <button
-                              key={epIdx}
-                              onClick={() => setSelectedEp({ seasonNum: sNum, epNum, epTitle })}
-                              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors group ${isCurrent ? "bg-red-600/10 border-l-2 border-red-500" : "hover:bg-zinc-800/60"}`}
-                            >
-                              <div className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 group-hover:text-red-400"}`}>
-                                {epNum}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className={`text-xs font-medium truncate ${isCurrent ? "text-red-400" : "text-gray-300 group-hover:text-white"}`}>
-                                  {epTitle}
-                                </p>
-                                {ep.duration && <p className="text-xs text-gray-600">{Math.floor(ep.duration / 60)} min</p>}
-                              </div>
-                              {isCurrent && <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {isOpen && (!s.episodes || s.episodes.length === 0) && (
-                      <div className="py-6 text-center text-gray-500 text-xs bg-zinc-950/60">No episodes available</div>
-                    )}
+                    </div>
                   </div>
-                );
-              })}
+
+                  <button
+                    onClick={() => {
+                      setSelectedEp({ seasonNum: manualSeason, epNum: manualEp, epTitle: `Episode ${manualEp}` });
+                    }}
+                    className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-xl font-bold text-sm transition-colors w-full justify-center"
+                  >
+                    <Play className="h-4 w-4 fill-current" />
+                    S{manualSeason} · E{manualEp}
+                  </button>
+                </div>
+              ) : (
+                /* Full accordion with season data */
+                seasons.map((s: SeasonItem, i: number) => {
+                  const sNum = s.seasonNumber ?? s.season ?? (i + 1);
+                  const epCount = s.episodes?.length || 0;
+                  const isOpen = expandedSeason === i;
+
+                  return (
+                    <div key={i} className="border-b border-zinc-800/60">
+                      <button
+                        onClick={() => setExpandedSeason(isOpen ? null : i)}
+                        className={`w-full flex items-center justify-between px-4 py-3.5 text-left transition-colors ${isOpen ? "bg-zinc-800" : "hover:bg-zinc-900"}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black ${isOpen ? "bg-red-600 text-white" : "bg-zinc-700 text-gray-300"}`}>
+                            {sNum}
+                          </div>
+                          <p className="text-sm font-semibold text-white">Season {sNum}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {epCount > 0 && <span className="text-xs text-gray-500">{epCount} ep</span>}
+                          <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180 text-red-400" : ""}`} />
+                        </div>
+                      </button>
+
+                      {isOpen && s.episodes && s.episodes.length > 0 && (
+                        <div className="bg-zinc-950/60">
+                          {s.episodes.map((ep: EpisodeItem, epIdx: number) => {
+                            const epNum = ep.episodeNumber ?? ep.episode ?? (epIdx + 1);
+                            const epTitle = ep.title ?? ep.name ?? `Episode ${epNum}`;
+                            const isCurrent = String(sNum) === season && String(epNum) === episode;
+
+                            return (
+                              <button
+                                key={epIdx}
+                                onClick={() => setSelectedEp({ seasonNum: sNum, epNum, epTitle })}
+                                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors group ${isCurrent ? "bg-red-600/10 border-l-2 border-red-500" : "hover:bg-zinc-800/60"}`}
+                              >
+                                <div className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 group-hover:text-red-400"}`}>
+                                  {epNum}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-xs font-medium truncate ${isCurrent ? "text-red-400" : "text-gray-300 group-hover:text-white"}`}>
+                                    {epTitle}
+                                  </p>
+                                  {ep.duration && <p className="text-xs text-gray-600">{Math.floor(ep.duration / 60)} min</p>}
+                                </div>
+                                {isCurrent && <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {isOpen && (!s.episodes || s.episodes.length === 0) && (
+                        <div className="py-6 text-center text-gray-500 text-xs bg-zinc-950/60">No episodes available</div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
