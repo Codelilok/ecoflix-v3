@@ -225,7 +225,7 @@ export default function TVDetail() {
   const year = getYear(show);
   const genres = getGenres(show);
   const isSaved = isInWishlist(show.subjectId);
-  const seasons = show.resource || [];
+  const seasons = Array.isArray(show.resource) ? show.resource : [];
   const hasSeasons = seasons.length > 0;
   const totalEpisodes = seasons.reduce((sum, s) => sum + (s.episodes?.length || 0), 0);
 

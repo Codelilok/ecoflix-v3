@@ -213,7 +213,8 @@ export default function Player() {
 
   const streams: Stream[] = streamData?.streams || [];
   const rawSubtitles: any[] = (streamData as any)?.data?.subtitles || (streamData as any)?.subtitles || [];
-  const seasons: SeasonItem[] = (detailData as any)?.resource || [];
+  const seasonsRaw = (detailData as any)?.resource;
+  const seasons: SeasonItem[] = Array.isArray(seasonsRaw) ? seasonsRaw : [];
 
   const [currentStream, setCurrentStream] = useState<string | null>(directStreamUrl);
   const [isPlaying, setIsPlaying] = useState(false);
