@@ -7,7 +7,7 @@ import { useBrowse, useSearchCategory } from "@/hooks/use-ecoflix";
 import { MediaItem } from "@/lib/api-types";
 import { cn } from "@/lib/utils";
 
-const GENRES = ["Action", "Drama", "Comedy", "Thriller", "Sci-Fi", "Horror", "Romance", "Documentary", "Animation", "Fantasy", "Crime", "Adventure", "K-Drama", "C-Drama", "Nollywood"];
+const GENRES = ["Action", "Drama", "Comedy", "Thriller", "Sci-Fi", "Horror", "Romance", "Documentary", "Animation", "Crime", "Adventure", "K-Drama", "C-Drama", "Nollywood"];
 
 const CATEGORY_MAP: Record<string, { label: string; useSearch?: boolean; keyword?: string; genre?: string }> = {
   "Popular Series": { label: "Popular Series", genre: "Drama" },

@@ -115,21 +115,6 @@ export default function Search() {
               </div>
             )}
 
-            <div className="text-center mb-10">
-              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-5">Popular Searches</h3>
-              <div className="flex flex-wrap justify-center gap-3 max-w-2xl mx-auto">
-                {POPULAR_SEARCHES.map(term => (
-                  <button
-                    key={term}
-                    onClick={() => setQuery(term)}
-                    className="bg-zinc-900 hover:bg-red-600/20 hover:text-red-400 hover:border-red-500/50 border border-zinc-700 px-5 py-2.5 rounded-lg text-sm font-medium text-gray-300 transition-colors"
-                  >
-                    {term}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {everyoneSearching.length > 0 && (
               <div className="mt-6">
                 <div className="flex items-center gap-2 mb-4 justify-center">
