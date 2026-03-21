@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useDebounceValue } from "usehooks-ts";
+import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { MediaCard } from "@/components/MediaCard";
 import { Spinner } from "@/components/ui/spinner";
 import { useSearch, useTrending } from "@/hooks/use-ecoflix";
 import { useSearchHistory } from "@/hooks/use-local-state";
-import { Search as SearchIcon, Film, Tv, LayoutGrid, X, TrendingUp, Clock } from "lucide-react";
+import { Search as SearchIcon, Film, Tv, LayoutGrid, X, TrendingUp, Clock, ChevronRight } from "lucide-react";
 import { cn, getType } from "@/lib/utils";
 
 const POPULAR_SEARCHES = ["Action", "Drama", "Comedy", "Thriller", "Sci-Fi", "Horror", "Romance", "Documentary", "Fantasy", "Adventure"];
@@ -133,15 +134,34 @@ export default function Search() {
             </div>
 
             {everyoneSearching.length > 0 && (
-              <div className="mt-4">
-                <div className="flex items-center gap-2 mb-5">
+              <div className="mt-4 max-w-2xl mx-auto">
+                <div className="flex items-center gap-2 mb-4">
                   <TrendingUp className="h-5 w-5 text-red-500" />
                   <h3 className="text-lg font-bold text-white">Everyone is Searching</h3>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
-                  {everyoneSearching.map((item, i) => (
-                    <MediaCard key={`${item.subjectId}-${i}`} item={item} />
-                  ))}
+                <div className="space-y-1">
+                  {everyoneSearching.map((item, i) => {
+                    const type = item.subjectType === 2 ? 'tv' : 'movie';
+                    return (
+                      <Link key={`${item.subjectId}-${i}`} href={`/${type}/${item.subjectId}`}>
+                        <div className="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-zinc-900 transition-colors group cursor-pointer">
+                          <span className="text-2xl font-black text-zinc-700 group-hover:text-zinc-500 w-8 text-right flex-shrink-0 transition-colors">
+                            {i + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-semibold text-sm group-hover:text-red-400 transition-colors line-clamp-1">
+                              {item.title}
+                            </p>
+                            <p className="text-gray-500 text-xs mt-0.5">
+                              {type === 'tv' ? 'TV Series' : 'Movie'}
+                              {(item as any).genre ? ` · ${(item as any).genre.split(',')[0]}` : ''}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-red-500 transition-colors flex-shrink-0" />
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             )}

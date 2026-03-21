@@ -26,7 +26,6 @@ export function Navbar() {
     { name: "Home", path: "/", icon: Home },
     { name: "Browse", path: "/browse", icon: Grid },
     { name: "Rankings", path: "/ranking", icon: BarChart2 },
-    { name: "Search", path: "/search", icon: Search },
     { name: "My Wishlist", path: "/wishlist", icon: Heart },
     { name: "Watch History", path: "/history", icon: Clock },
   ];
