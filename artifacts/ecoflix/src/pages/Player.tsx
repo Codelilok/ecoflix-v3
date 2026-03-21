@@ -556,10 +556,10 @@ export default function Player() {
         </div>
       )}
 
-      {/* Custom subtitle overlay */}
+      {/* Custom subtitle overlay — positioned inside the video area */}
       {currentSubCue && (
-        <div className="absolute left-0 right-0 pointer-events-none z-10 flex justify-center" style={{ bottom: showControls ? "108px" : "24px" }}>
-          <div className="bg-black/80 text-white text-sm md:text-base px-4 py-1.5 rounded max-w-[90%] text-center leading-snug whitespace-pre-line">
+        <div className="absolute left-0 right-0 pointer-events-none z-10 flex justify-center" style={{ bottom: "160px" }}>
+          <div className="bg-black/80 text-white text-base md:text-lg px-5 py-2 rounded-lg max-w-[85%] text-center leading-snug whitespace-pre-line font-medium shadow-2xl">
             {currentSubCue.text}
           </div>
         </div>

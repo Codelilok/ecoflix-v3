@@ -8,7 +8,10 @@ import { ContentRow } from "@/components/ContentRow";
 import { CastCard } from "@/components/CastCard";
 import { QualityModal } from "@/components/QualityModal";
 import { getTitle, getPoster, getYear, getGenres, cn } from "@/lib/utils";
-import { Play, Plus, Check, Star, Calendar, Share2, Download, ChevronDown, ChevronRight, Tv, Users, ArrowLeft, X } from "lucide-react";
+import {
+  Play, Plus, Check, Star, Calendar, Share2, Download,
+  ChevronDown, Tv, Users, ArrowLeft, X, Loader2,
+} from "lucide-react";
 import { Stream, EpisodeItem } from "@/lib/api-types";
 
 function shareMedia(title: string, id: string) {
@@ -16,9 +19,11 @@ function shareMedia(title: string, id: string) {
   if (navigator.share) {
     navigator.share({ title, url }).catch(() => {});
   } else {
-    navigator.clipboard.writeText(url).then(() => alert("Link copied to clipboard!")).catch(() => {});
+    navigator.clipboard.writeText(url).then(() => alert("Link copied!")).catch(() => {});
   }
 }
+
+/* ─── EpisodeModal ─── */
 
 interface EpisodeModalProps {
   isOpen: boolean;
@@ -32,12 +37,12 @@ interface EpisodeModalProps {
 
 function EpisodeModal({ isOpen, onClose, showId, showTitle, seasonNumber, epNum, epTitle }: EpisodeModalProps) {
   const [, setLocation] = useLocation();
-  const { data: streamData, isLoading } = usePlay(showId, 'tv', String(seasonNumber), String(epNum));
+  const { data: streamData, isLoading } = usePlay(showId, "tv", String(seasonNumber), String(epNum));
   const [showStreamModal, setShowStreamModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   const streams: Stream[] = streamData?.streams || [];
-  const episodeLabel = `S${seasonNumber}E${epNum}`;
+  const modalTitle = `Season ${seasonNumber} - Episode ${epNum}`;
 
   if (!isOpen) return null;
 
@@ -49,10 +54,7 @@ function EpisodeModal({ isOpen, onClose, showId, showTitle, seasonNumber, epNum,
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-[90] flex items-center justify-center p-4"
-        onClick={onClose}
-      >
+      <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" onClick={onClose}>
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
         <div
           className="relative bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
@@ -60,9 +62,9 @@ function EpisodeModal({ isOpen, onClose, showId, showTitle, seasonNumber, epNum,
         >
           <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-zinc-800">
             <div>
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-widest">{episodeLabel}</p>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-widest">{modalTitle}</p>
               <h3 className="text-white font-bold text-base mt-0.5 line-clamp-2">
-                {epTitle !== `Episode ${epNum}` ? epTitle : `${showTitle}`}
+                {epTitle !== `Episode ${epNum}` ? epTitle : showTitle}
               </h3>
             </div>
             <button
@@ -74,13 +76,11 @@ function EpisodeModal({ isOpen, onClose, showId, showTitle, seasonNumber, epNum,
           </div>
 
           <div className="p-5 space-y-3">
-            <p className="text-gray-400 text-sm">
-              Season {seasonNumber} — Episode {epNum}
-            </p>
+            <p className="text-gray-400 text-sm">{modalTitle}</p>
 
             {isLoading ? (
               <div className="flex items-center justify-center py-6">
-                <div className="h-8 w-8 animate-spin border-2 border-red-500 border-t-transparent rounded-full" />
+                <Loader2 className="h-8 w-8 animate-spin text-red-500" />
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -100,9 +100,7 @@ function EpisodeModal({ isOpen, onClose, showId, showTitle, seasonNumber, epNum,
                 </button>
 
                 <button
-                  onClick={() => {
-                    if (streams.length > 0) setShowDownloadModal(true);
-                  }}
+                  onClick={() => { if (streams.length > 0) setShowDownloadModal(true); }}
                   disabled={streams.length === 0}
                   className={cn(
                     "flex items-center gap-3 px-6 py-3.5 rounded-xl font-bold text-sm transition-colors active:scale-95 w-full justify-center",
@@ -127,20 +125,69 @@ function EpisodeModal({ isOpen, onClose, showId, showTitle, seasonNumber, epNum,
         title={showTitle}
         mode="stream"
         onSelectStream={handleStreamSelect}
-        episodeLabel={episodeLabel}
+        episodeLabel={modalTitle}
       />
-
       <QualityModal
         isOpen={showDownloadModal}
         onClose={() => setShowDownloadModal(false)}
         streams={streams}
         title={showTitle}
         mode="download"
-        episodeLabel={episodeLabel}
+        episodeLabel={modalTitle}
       />
     </>
   );
 }
+
+/* ─── DirectStreamButton ─── fallback when no seasons data ─── */
+
+function DirectStreamButton({ showId, showTitle }: { showId: string; showTitle: string }) {
+  const [, setLocation] = useLocation();
+  const { data: streamData, isLoading } = usePlay(showId, "tv");
+  const [showQuality, setShowQuality] = useState(false);
+  const streams: Stream[] = streamData?.streams || [];
+
+  const handleStreamSelect = (stream: Stream) => {
+    const url = stream.proxyUrl || stream.url;
+    setLocation(`/player?id=${showId}&type=tv&streamUrl=${encodeURIComponent(url)}`);
+  };
+
+  const handlePlay = () => {
+    if (isLoading) return;
+    if (streams.length === 0) {
+      setLocation(`/player?id=${showId}&type=tv`);
+    } else if (streams.length === 1) {
+      handleStreamSelect(streams[0]);
+    } else {
+      setShowQuality(true);
+    }
+  };
+
+  return (
+    <>
+      <button
+        onClick={handlePlay}
+        disabled={isLoading}
+        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-60"
+      >
+        {isLoading
+          ? <Loader2 className="h-4 w-4 animate-spin" />
+          : <Play className="h-4 w-4 fill-current" />}
+        {isLoading ? "Loading..." : "Stream Now"}
+      </button>
+      <QualityModal
+        isOpen={showQuality}
+        onClose={() => setShowQuality(false)}
+        streams={streams}
+        title={showTitle}
+        mode="stream"
+        onSelectStream={handleStreamSelect}
+      />
+    </>
+  );
+}
+
+/* ─── TVDetail ─── */
 
 export default function TVDetail() {
   const { id } = useParams<{ id: string }>();
@@ -169,6 +216,7 @@ export default function TVDetail() {
   const genres = getGenres(show);
   const isSaved = isInWishlist(show.subjectId);
   const seasons = show.resource || [];
+  const hasSeasons = seasons.length > 0;
 
   return (
     <Layout>
@@ -181,7 +229,6 @@ export default function TVDetail() {
         <button
           onClick={() => window.history.back()}
           className="absolute top-20 left-6 md:left-14 z-10 flex items-center justify-center w-10 h-10 rounded-full bg-black/50 border border-white/20 hover:bg-black/80 transition-all backdrop-blur-sm"
-          aria-label="Go back"
         >
           <ArrowLeft className="h-5 w-5 text-white" />
         </button>
@@ -203,7 +250,7 @@ export default function TVDetail() {
                 )}
                 {year && <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> {year}</span>}
                 <span className="px-2 py-0.5 border border-gray-600 rounded text-xs uppercase font-bold bg-black/40">TV Series</span>
-                {seasons.length > 0 && <span className="text-gray-400">{seasons.length} Season{seasons.length !== 1 ? 's' : ''}</span>}
+                {hasSeasons && <span className="text-gray-400">{seasons.length} Season{seasons.length !== 1 ? "s" : ""}</span>}
               </div>
 
               {genres.length > 0 && (
@@ -215,8 +262,13 @@ export default function TVDetail() {
               )}
 
               <div className="flex items-center gap-3 pt-1 flex-wrap">
+                {/* Show Stream Now button when there are no seasons (fallback direct play) */}
+                {!hasSeasons && (
+                  <DirectStreamButton showId={show.subjectId} showTitle={title} />
+                )}
+
                 <button
-                  onClick={() => toggleWishlist({ id: show.subjectId, type: 'tv', title, poster })}
+                  onClick={() => toggleWishlist({ id: show.subjectId, type: "tv", title, poster })}
                   className={cn(
                     "flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm border transition-all",
                     isSaved ? "bg-green-600/20 border-green-500 text-green-400" : "bg-zinc-800/80 border-zinc-600 text-white hover:border-white"
@@ -257,7 +309,7 @@ export default function TVDetail() {
               <Users className="h-5 w-5 text-red-500" />
               <h3 className="text-xl font-bold text-white">Cast</h3>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
               {show.stars.slice(0, 15).map((actor, i) => (
                 <CastCard
                   key={i}
@@ -270,14 +322,20 @@ export default function TVDetail() {
           </section>
         )}
 
-        {/* Episodes & Seasons */}
-        {seasons.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-6">
-              <Tv className="h-5 w-5 text-red-500" />
-              <h3 className="text-xl font-bold text-white">Episodes &amp; Seasons</h3>
-            </div>
+        {/* Episodes & Seasons — always shown for TV shows */}
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <Tv className="h-5 w-5 text-red-500" />
+            <h3 className="text-xl font-bold text-white">Episodes &amp; Seasons</h3>
+          </div>
 
+          {!hasSeasons ? (
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl px-6 py-8 text-center max-w-2xl">
+              <Tv className="h-10 w-10 text-zinc-600 mx-auto mb-3" />
+              <p className="text-gray-400 text-sm">Season and episode data is not yet available for this series.</p>
+              <p className="text-gray-500 text-xs mt-1">Use the Stream Now button above to watch directly.</p>
+            </div>
+          ) : (
             <div className="space-y-3 max-w-2xl">
               {seasons.map((s, i) => {
                 const sNum = s.seasonNumber ?? s.season ?? (i + 1);
@@ -290,9 +348,7 @@ export default function TVDetail() {
                       onClick={() => setExpandedSeasonIdx(isExpanded ? null : i)}
                       className={cn(
                         "w-full flex items-center justify-between px-5 py-4 text-left transition-all",
-                        isExpanded
-                          ? "bg-zinc-800 border-b border-zinc-700"
-                          : "bg-zinc-900/60 hover:bg-zinc-800"
+                        isExpanded ? "bg-zinc-800 border-b border-zinc-700" : "bg-zinc-900/60 hover:bg-zinc-800"
                       )}
                     >
                       <div className="flex items-center gap-3">
@@ -302,19 +358,19 @@ export default function TVDetail() {
                         )}>
                           {sNum}
                         </div>
-                        <div>
-                          <p className={cn("font-semibold text-sm", isExpanded ? "text-white" : "text-gray-200")}>
-                            Season {sNum}{s.seasonName ? ` — ${s.seasonName}` : ''}
-                          </p>
-                          {epCount > 0 && (
-                            <p className="text-xs text-gray-500">{epCount} episode{epCount !== 1 ? 's' : ''}</p>
-                          )}
-                        </div>
+                        <p className={cn("font-semibold text-sm", isExpanded ? "text-white" : "text-gray-200")}>
+                          Season {sNum}{s.seasonName ? ` — ${s.seasonName}` : ""}
+                        </p>
                       </div>
-                      <ChevronDown className={cn(
-                        "h-5 w-5 text-gray-400 transition-transform duration-200",
-                        isExpanded ? "rotate-180 text-red-400" : ""
-                      )} />
+                      <div className="flex items-center gap-3">
+                        {epCount > 0 && (
+                          <span className="text-xs text-gray-400 font-medium">{epCount} episode{epCount !== 1 ? "s" : ""}</span>
+                        )}
+                        <ChevronDown className={cn(
+                          "h-5 w-5 text-gray-400 transition-transform duration-200",
+                          isExpanded ? "rotate-180 text-red-400" : ""
+                        )} />
+                      </div>
                     </button>
 
                     {isExpanded && s.episodes && s.episodes.length > 0 && (
@@ -356,8 +412,8 @@ export default function TVDetail() {
                 );
               })}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         {/* Recommendations */}
         {recommend && recommend.length > 0 && (
