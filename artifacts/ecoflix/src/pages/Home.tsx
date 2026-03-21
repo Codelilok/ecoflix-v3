@@ -63,7 +63,6 @@ export default function Home() {
         <ContentRow
           title="Popular Series"
           items={popularSeries}
-          showMoreHref="/category/popular-series"
         />
 
         <ContentRow

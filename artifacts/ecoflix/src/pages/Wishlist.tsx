@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { useWishlist } from "@/hooks/use-local-state";
-import { Heart, Trash2, Play, Search } from "lucide-react";
+import { Heart, Trash2, Play, Search, X } from "lucide-react";
 import { getType } from "@/lib/utils";
 
 export default function Wishlist() {
@@ -88,12 +88,13 @@ export default function Wishlist() {
                   <button
                     onClick={(e) => {
                       e.preventDefault();
+                      e.stopPropagation();
                       toggleWishlist(item);
                     }}
-                    className="absolute top-2 right-2 p-1.5 bg-black/70 backdrop-blur-sm rounded-full text-gray-300 hover:text-white hover:bg-red-600 border border-white/10 transition-all opacity-0 group-hover:opacity-100"
+                    className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/80 backdrop-blur-sm rounded-full text-white hover:bg-red-600 border border-white/20 transition-all flex items-center justify-center z-10"
                     title="Remove from List"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               );

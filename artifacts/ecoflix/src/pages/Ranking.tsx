@@ -14,9 +14,13 @@ export default function Ranking() {
   const rawMovies = Array.isArray(movieData) ? movieData : [];
   const rawTv = Array.isArray(tvData) ? tvData : [];
 
-  // Filter correctly: movies page shows only subjectType 1, TV shows only subjectType 2
-  const movies = rawMovies.filter(i => i.subjectType === 1);
-  const tvShows = rawTv.filter(i => i.subjectType === 2);
+  // Trust the API categorization — movie ranking returns movies, tv ranking returns series
+  const movies = rawMovies.filter(i => i.subjectType === 1).length > 0
+    ? rawMovies.filter(i => i.subjectType === 1)
+    : rawMovies;
+  const tvShows = rawTv.filter(i => i.subjectType === 2).length > 0
+    ? rawTv.filter(i => i.subjectType === 2)
+    : rawTv;
 
   const items = tab === 'movie' ? movies : tvShows;
   const isLoading = tab === 'movie' ? loadMovies : loadTv;
