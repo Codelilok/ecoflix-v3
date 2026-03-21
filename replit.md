@@ -46,10 +46,19 @@ ECOFLIX is a fully functional Netflix-style streaming website at `/` (preview pa
 - **Search**: Debounced search with filter tabs (All/Movies/TV Shows) and popular search terms
 - **Movie Detail**: Backdrop hero, IMDb rating, genre badges, cast grid, Add to List, Play button, recommendations
 - **TV Detail**: Same as movie detail + season/episode selector with episode list
-- **Player**: HTML5 video player with stream from XCASPER API, progress saving to localStorage
+- **Player**: HTML5 video player with stream from XCASPER API, progress saving to localStorage. Episodes switch instantly in the sidebar without any stream/download prompt. Quality preference is remembered via sessionStorage across episode switches.
 - **Browse**: Genre filter buttons, paginated grid, Load More
 - **Rankings**: Top Movies/TV Shows with gold/silver/bronze numbering
 - **Wishlist**: localStorage-persisted list with remove and clear all
+- **Watch History**: Per-item X button always visible for easy removal; clear all option
+- **Download**: Two-step download flow — quality selection → Video Only or Video + Subtitles (with subtitle language selector). Downloads trigger instantly in-browser.
+- **Watch Party**: Real-time co-watching with WebSocket sync. Features: 6-digit party codes, secret movie selection from trending, coin flip with animation, override options (swap/reflip), synchronized video player, live chat with typing indicators, between-movie prompt with countdown, and celebration screen.
+
+### Watch Party Architecture
+- **Backend**: WebSocket server on api-server (`/api/ws` path, `ws` package)
+- **Party management**: In-memory Map of party states, 2-person parties, unique 6-digit codes
+- **Phases**: lobby → selecting → flipping → watching → done
+- **Sync**: Playback state (play/pause/seek) broadcast to all members except sender
 
 ### External API
 - **Base URL**: `https://movieapi.xcasper.space/api`

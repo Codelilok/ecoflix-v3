@@ -7,7 +7,7 @@ import { Stream, EpisodeItem, SeasonItem } from "@/lib/api-types";
 import {
   ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   RotateCcw, RotateCw, Settings, Loader2, AlertCircle, Check,
-  List, ChevronDown, X, Download, Minus,
+  List, ChevronDown, X, Minus,
 } from "lucide-react";
 
 /* ─── helpers ─── */
@@ -57,141 +57,6 @@ function parseVTT(text: string): { start: number; end: number; text: string }[] 
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-/* ─── PlayerEpisodeModal ─── */
-
-interface PlayerEpisodeModalProps {
-  showId: string;
-  showTitle: string;
-  seasonNum: number;
-  epNum: number;
-  epTitle: string;
-  onClose: () => void;
-  onStream: (seasonNum: number, epNum: number, stream?: Stream) => void;
-}
-
-function PlayerEpisodeModal({ showId, showTitle, seasonNum, epNum, epTitle, onClose, onStream }: PlayerEpisodeModalProps) {
-  const { data: streamData, isLoading } = usePlay(showId, "tv", String(seasonNum), String(epNum));
-  const streams: Stream[] = streamData?.streams || [];
-  const [showQuality, setShowQuality] = useState<"stream" | "download" | null>(null);
-
-  const episodeLabel = `Season ${seasonNum} - Episode ${epNum}`;
-
-  const handleDownload = (stream: Stream) => {
-    const url = stream.downloadUrl || stream.url;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${showTitle} ${episodeLabel}.mp4`;
-    a.target = "_blank";
-    a.click();
-  };
-
-  if (showQuality) {
-    const sorted = [...streams].sort((a, b) => parseInt(b.resolutions || "0") - parseInt(a.resolutions || "0"));
-    return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
-        <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
-        <div
-          className="relative bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-xs shadow-2xl overflow-hidden"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-zinc-800">
-            <div>
-              <p className="text-xs text-gray-400 uppercase tracking-widest">{showQuality === "stream" ? "Select Quality" : "Download"}</p>
-              <h3 className="text-white font-bold text-sm mt-0.5">{episodeLabel}</h3>
-            </div>
-            <button onClick={() => setShowQuality(null)} className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center">
-              <X className="h-4 w-4 text-white" />
-            </button>
-          </div>
-          <div className="py-2">
-            {sorted.map(s => {
-              const label = s.resolutions ? `${s.resolutions}p` : s.format;
-              const sizeBytes = typeof s.size === "string" ? parseInt(s.size as any) : (s.size || 0);
-              const sizeMB = sizeBytes > 0 ? `${(sizeBytes / 1024 / 1024).toFixed(0)} MB` : "";
-              return (
-                <button
-                  key={s.id || s.url}
-                  onClick={() => {
-                    if (showQuality === "stream") onStream(seasonNum, epNum, s);
-                    else handleDownload(s);
-                    onClose();
-                  }}
-                  className="w-full flex items-center justify-between px-5 py-3 hover:bg-zinc-800 transition-colors"
-                >
-                  <span className="text-white font-semibold text-sm">{label}</span>
-                  {sizeMB && <span className="text-gray-500 text-xs">{sizeMB}</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
-      <div
-        className="relative bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-zinc-800">
-          <div>
-            <p className="text-xs text-gray-400 uppercase tracking-widest font-medium">{episodeLabel}</p>
-            <h3 className="text-white font-bold text-base mt-0.5 line-clamp-2">
-              {epTitle !== `Episode ${epNum}` ? epTitle : showTitle}
-            </h3>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center ml-3 flex-shrink-0">
-            <X className="h-4 w-4 text-white" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-3">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 className="h-8 w-8 animate-spin text-red-500" />
-            </div>
-          ) : (
-            <>
-              <button
-                onClick={() => {
-                  if (streams.length <= 1) {
-                    onStream(seasonNum, epNum, streams[0]);
-                    onClose();
-                  } else {
-                    setShowQuality("stream");
-                  }
-                }}
-                className="flex items-center gap-3 bg-red-600 hover:bg-red-700 text-white px-6 py-3.5 rounded-xl font-bold text-sm transition-colors w-full justify-center"
-              >
-                <Play className="h-4 w-4 fill-current" />
-                Stream Episode
-              </button>
-
-              <button
-                onClick={() => {
-                  if (streams.length > 0) setShowQuality("download");
-                }}
-                disabled={streams.length === 0}
-                className={`flex items-center gap-3 px-6 py-3.5 rounded-xl font-bold text-sm transition-colors w-full justify-center ${
-                  streams.length > 0
-                    ? "bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white"
-                    : "bg-zinc-800/50 border border-zinc-700 text-zinc-500 cursor-not-allowed"
-                }`}
-              >
-                <Download className="h-4 w-4" />
-                Download Episode
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ─── Player ─── */
 
 export default function Player() {
@@ -235,7 +100,6 @@ export default function Player() {
   const [subtitleCues, setSubtitleCues] = useState<{ start: number; end: number; text: string }[]>([]);
   const [showEpisodes, setShowEpisodes] = useState(false);
   const [expandedSeason, setExpandedSeason] = useState<number | null>(0);
-  const [selectedEp, setSelectedEp] = useState<{ seasonNum: number; epNum: number; epTitle: string } | null>(null);
   const [manualSeason, setManualSeason] = useState(Number(season) || 1);
   const [manualEp, setManualEp] = useState(Number(episode) || 1);
 
@@ -248,15 +112,29 @@ export default function Player() {
 
   const title = getTitle(detailData);
 
-  /* pick best stream automatically */
+  /* pick best stream automatically — prefer previously chosen quality */
   useEffect(() => {
     if (!directStreamUrl && streams.length > 0 && !currentStream) {
-      const hq = streams.reduce((best, s) =>
-        parseInt(s.resolutions || "0") > parseInt(best.resolutions || "0") ? s : best
-      );
-      setCurrentStream(hq.proxyUrl || hq.url);
+      const preferred = sessionStorage.getItem("ecoflix-quality");
+      let chosen = preferred ? streams.find(s => s.resolutions === preferred) : null;
+      if (!chosen) {
+        chosen = streams.reduce((best, s) =>
+          parseInt(s.resolutions || "0") > parseInt(best.resolutions || "0") ? s : best
+        );
+      }
+      setCurrentStream(chosen.proxyUrl || chosen.url);
     }
   }, [streams, directStreamUrl, currentStream]);
+
+  /* store quality when playing via direct URL from detail page */
+  useEffect(() => {
+    if (directStreamUrl && streams.length > 0) {
+      const match = streams.find(s => (s.proxyUrl || s.url) === directStreamUrl);
+      if (match?.resolutions) {
+        sessionStorage.setItem("ecoflix-quality", match.resolutions);
+      }
+    }
+  }, [directStreamUrl, streams]);
 
   /* controls auto-hide */
   const startHideTimer = useCallback(() => {
@@ -429,6 +307,7 @@ export default function Player() {
   }, [isScrubbing, duration]);
 
   const switchQuality = useCallback((stream: Stream) => {
+    if (stream.resolutions) sessionStorage.setItem("ecoflix-quality", stream.resolutions);
     const video = videoRef.current;
     savedTimeRef.current = video?.currentTime || 0;
     setCurrentStream(stream.proxyUrl || stream.url);
@@ -458,7 +337,7 @@ export default function Player() {
   }, [id, setLocation]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (showEpisodes || selectedEp) return;
+    if (showEpisodes) return;
     switch (e.key) {
       case " ": e.preventDefault(); togglePlay(); break;
       case "ArrowRight": e.preventDefault(); seek(10); break;
@@ -467,9 +346,9 @@ export default function Player() {
       case "ArrowDown": e.preventDefault(); handleVolumeChange(Math.max(0, volume - 0.1)); break;
       case "f": case "F": toggleFullscreen(); break;
       case "m": case "M": toggleMute(); break;
-      case "Escape": setShowEpisodes(false); setShowSettings(false); setSelectedEp(null); break;
+      case "Escape": setShowEpisodes(false); setShowSettings(false); break;
     }
-  }, [togglePlay, seek, handleVolumeChange, volume, toggleFullscreen, toggleMute, showEpisodes, selectedEp]);
+  }, [togglePlay, seek, handleVolumeChange, volume, toggleFullscreen, toggleMute, showEpisodes]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -836,7 +715,7 @@ export default function Player() {
 
                   <button
                     onClick={() => {
-                      setSelectedEp({ seasonNum: manualSeason, epNum: manualEp, epTitle: `Episode ${manualEp}` });
+                      streamEpisode(manualSeason, manualEp);
                     }}
                     className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-xl font-bold text-sm transition-colors w-full justify-center"
                   >
@@ -879,7 +758,7 @@ export default function Player() {
                             return (
                               <button
                                 key={epIdx}
-                                onClick={() => setSelectedEp({ seasonNum: sNum, epNum, epTitle })}
+                                onClick={() => !isCurrent && streamEpisode(sNum, epNum)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors group ${isCurrent ? "bg-red-600/10 border-l-2 border-red-500" : "hover:bg-zinc-800/60"}`}
                               >
                                 <div className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 ${isCurrent ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 group-hover:text-red-400"}`}>
@@ -908,19 +787,6 @@ export default function Player() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* ── Episode action modal (shown when tapping an episode in sidebar) ── */}
-      {selectedEp && (
-        <PlayerEpisodeModal
-          showId={id}
-          showTitle={title}
-          seasonNum={selectedEp.seasonNum}
-          epNum={selectedEp.epNum}
-          epTitle={selectedEp.epTitle}
-          onClose={() => setSelectedEp(null)}
-          onStream={streamEpisode}
-        />
       )}
 
       <style>{`

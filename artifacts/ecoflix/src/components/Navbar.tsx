@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock } from "lucide-react";
+import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
@@ -28,6 +28,7 @@ export function Navbar() {
     { name: "Rankings", path: "/ranking", icon: BarChart2 },
     { name: "My Wishlist", path: "/wishlist", icon: Heart },
     { name: "Watch History", path: "/history", icon: Clock },
+    { name: "Watch Party", path: "/watch-party", icon: Users },
   ];
 
   return (

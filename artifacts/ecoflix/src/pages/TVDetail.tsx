@@ -42,6 +42,7 @@ function EpisodeModal({ isOpen, onClose, showId, showTitle, seasonNumber, epNum,
   const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   const streams: Stream[] = streamData?.streams || [];
+  const subtitles: any[] = (streamData as any)?.data?.subtitles || (streamData as any)?.subtitles || [];
   const modalTitle = `Season ${seasonNumber} - Episode ${epNum}`;
 
   if (!isOpen) return null;
@@ -131,6 +132,7 @@ function EpisodeModal({ isOpen, onClose, showId, showTitle, seasonNumber, epNum,
         title={showTitle}
         mode="download"
         episodeLabel={modalTitle}
+        subtitles={subtitles}
       />
     </>
   );

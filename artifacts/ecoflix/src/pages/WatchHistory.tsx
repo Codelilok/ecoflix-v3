@@ -133,7 +133,7 @@ export default function WatchHistory() {
 
                         <button
                           onClick={() => removeFromHistory(item.id, item.season, item.episode)}
-                          className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-red-600 flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                          className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0"
                           title="Remove from history"
                         >
                           <X className="h-3.5 w-3.5 text-white" />

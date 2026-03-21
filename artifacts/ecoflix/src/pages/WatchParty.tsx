@@ -1,0 +1,999 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Link, useLocation } from "wouter";
+import { Layout } from "@/components/Layout";
+import { useTrending } from "@/hooks/use-ecoflix";
+import { getTitle, getPoster, getYear } from "@/lib/utils";
+import { MediaItem } from "@/lib/api-types";
+import {
+  Users, Plus, ArrowRight, Copy, Check, RefreshCw, Play, Pause,
+  Volume2, VolumeX, Send, X, ChevronLeft, PartyPopper, Shuffle,
+  SkipForward, Star, Coins, Crown,
+} from "lucide-react";
+
+/* ─── Types ─── */
+interface WatchPartyMovie {
+  id: string;
+  type: string;
+  title: string;
+  poster: string;
+  year?: string;
+  rating?: string;
+}
+
+interface PartyMember {
+  id: string;
+  name: string;
+  hasSelected: boolean;
+}
+
+interface PartyStateData {
+  code: string;
+  members: PartyMember[];
+  phase: string;
+  currentMovieIdx: number;
+  playbackState: { playing: boolean; time: number; updatedAt: number } | null;
+  movies: WatchPartyMovie[];
+}
+
+interface ChatMessage {
+  from: string;
+  message: string;
+  ts: number;
+}
+
+type AppPhase =
+  | "entry"
+  | "lobby"
+  | "selecting"
+  | "flipping"
+  | "override"
+  | "watching"
+  | "between"
+  | "done";
+
+/* ─── Coin Flip Animation ─── */
+function CoinFlip({ winner, onDone }: { winner: WatchPartyMovie; onDone: () => void }) {
+  const [flipping, setFlipping] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFlipping(false);
+      setTimeout(onDone, 1200);
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-8 py-10">
+      <p className="text-white font-bold text-lg">Flipping coin...</p>
+      <div
+        className={`w-24 h-24 rounded-full border-4 border-yellow-400 bg-gradient-to-br from-yellow-300 to-yellow-600 flex items-center justify-center shadow-xl shadow-yellow-500/30 ${flipping ? "animate-spin" : "scale-110 transition-transform duration-500"}`}
+      >
+        <Coins className="h-10 w-10 text-yellow-900" />
+      </div>
+      {!flipping && (
+        <div className="flex flex-col items-center gap-3 animate-in fade-in duration-500">
+          <p className="text-yellow-400 font-black text-xl">🎉 Winner!</p>
+          <div className="flex items-center gap-3 bg-zinc-800 rounded-xl px-4 py-3">
+            {winner.poster && (
+              <img src={winner.poster} alt={winner.title} className="w-10 h-14 object-cover rounded-lg" />
+            )}
+            <p className="text-white font-bold">{winner.title}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Movie Card ─── */
+function MoviePickCard({
+  item,
+  selected,
+  onSelect,
+}: {
+  item: MediaItem;
+  selected: boolean;
+  onSelect: (movie: WatchPartyMovie) => void;
+}) {
+  const title = getTitle(item);
+  const poster = getPoster(item);
+  const year = getYear(item);
+
+  return (
+    <button
+      onClick={() =>
+        onSelect({
+          id: item.subjectId,
+          type: item.subjectType || "movie",
+          title,
+          poster: poster || "",
+          year: year || "",
+          rating: item.imdbRatingValue || "",
+        })
+      }
+      className={`relative rounded-xl overflow-hidden transition-all duration-200 active:scale-95 group ${selected ? "ring-4 ring-red-500 scale-105" : "hover:scale-102"}`}
+    >
+      <div className="aspect-[2/3] bg-zinc-800">
+        {poster ? (
+          <img src={poster} alt={title} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-zinc-600">
+            <Play className="h-8 w-8" />
+          </div>
+        )}
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
+      {selected && (
+        <div className="absolute top-2 right-2 bg-red-500 rounded-full p-1">
+          <Check className="h-3 w-3 text-white" />
+        </div>
+      )}
+      <div className="absolute bottom-0 left-0 right-0 p-2">
+        <p className="text-white text-xs font-bold line-clamp-2 leading-tight">{title}</p>
+        <div className="flex items-center gap-1 mt-0.5">
+          {item.imdbRatingValue && (
+            <span className="text-yellow-400 text-xs font-bold flex items-center gap-0.5">
+              <Star className="h-2.5 w-2.5 fill-current" /> {item.imdbRatingValue}
+            </span>
+          )}
+          {year && <span className="text-gray-400 text-xs">{year}</span>}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ─── Main Component ─── */
+export default function WatchParty() {
+  const [, setLocation] = useLocation();
+  const { data: trending = [] } = useTrending();
+
+  const [appPhase, setAppPhase] = useState<AppPhase>("entry");
+  const [name, setName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [mode, setMode] = useState<"create" | "join">("create");
+  const [partyCode, setPartyCode] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [isHost, setIsHost] = useState(false);
+  const [partyState, setPartyState] = useState<PartyStateData | null>(null);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [selectedMovie, setSelectedMovie] = useState<WatchPartyMovie | null>(null);
+  const [flipMovies, setFlipMovies] = useState<WatchPartyMovie[]>([]);
+  const [flipWinner, setFlipWinner] = useState<WatchPartyMovie | null>(null);
+  const [showCoinFlip, setShowCoinFlip] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [typingFrom, setTypingFrom] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showChat, setShowChat] = useState(true);
+  const [countdownSecs, setCountdownSecs] = useState<number | null>(null);
+  const [syncPending, setSyncPending] = useState(false);
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncThrottle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const sendWS = useCallback((msg: object) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+    }
+  }, []);
+
+  const connectWS = useCallback((onOpen: (ws: WebSocket) => void) => {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${proto}//${window.location.host}/api/ws`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => onOpen(ws);
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+
+        if (msg.type === "joined") {
+          setPartyCode(msg.partyCode);
+          setClientId(msg.clientId);
+          setIsHost(msg.isHost);
+          setAppPhase("lobby");
+        } else if (msg.type === "error") {
+          setError(msg.message);
+        } else if (msg.type === "party_state") {
+          const ps: PartyStateData = msg.party;
+          setPartyState(ps);
+          if (ps.phase === "selecting" && appPhase !== "selecting") {
+            setAppPhase("selecting");
+          } else if (ps.phase === "done") {
+            setAppPhase("done");
+          }
+          if ((ps.phase === "watching") && ps.movies.length > 0 && appPhase !== "watching") {
+            setAppPhase("watching");
+          }
+        } else if (msg.type === "phase_change") {
+          if (msg.phase === "selecting") setAppPhase("selecting");
+        } else if (msg.type === "ready_to_flip") {
+          setFlipMovies(msg.movies);
+          if (isHost) {
+            setTimeout(() => {
+              const movies: WatchPartyMovie[] = msg.movies;
+              const winnerIdx = Math.random() < 0.5 ? 0 : 1;
+              const ordered = [movies[winnerIdx], movies[1 - winnerIdx]];
+              setFlipWinner(ordered[0]);
+              setFlipMovies(ordered);
+              setShowCoinFlip(true);
+              setAppPhase("flipping");
+              sendWS({ type: "flip_result", movies: ordered });
+            }, 500);
+          } else {
+            setAppPhase("flipping");
+          }
+        } else if (msg.type === "flip_result") {
+          setFlipMovies(msg.movies);
+          setFlipWinner(msg.movies[0]);
+          setShowCoinFlip(true);
+          setAppPhase("flipping");
+        } else if (msg.type === "next_movie") {
+          setAppPhase("watching");
+          setCurrentTime(0);
+          setIsPlaying(false);
+          if (videoRef.current) {
+            videoRef.current.currentTime = 0;
+            videoRef.current.pause();
+          }
+        } else if (msg.type === "playback") {
+          const video = videoRef.current;
+          if (!video) return;
+          const drift = Math.abs(video.currentTime - msg.time);
+          if (drift > 1) video.currentTime = msg.time;
+          if (msg.playing && video.paused) {
+            video.play().catch(() => {});
+            setIsPlaying(true);
+          } else if (!msg.playing && !video.paused) {
+            video.pause();
+            setIsPlaying(false);
+          }
+        } else if (msg.type === "chat") {
+          setChatMessages((prev) => [...prev, { from: msg.from, message: msg.message, ts: msg.ts }]);
+          setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        } else if (msg.type === "typing") {
+          setTypingFrom(msg.isTyping ? msg.from : null);
+        } else if (msg.type === "member_left") {
+          setError("Your party partner left the party.");
+        }
+      } catch {}
+    };
+
+    ws.onerror = () => setError("Connection error. Please try again.");
+  }, [appPhase, isHost, sendWS]);
+
+  const handleCreate = () => {
+    if (!name.trim()) { setError("Please enter your name."); return; }
+    setError("");
+    connectWS((ws) => ws.send(JSON.stringify({ type: "create_party", name: name.trim() })));
+  };
+
+  const handleJoin = () => {
+    if (!name.trim()) { setError("Please enter your name."); return; }
+    if (!joinCode.trim() || joinCode.trim().length !== 6) { setError("Enter a valid 6-digit code."); return; }
+    setError("");
+    connectWS((ws) => ws.send(JSON.stringify({ type: "join_party", name: name.trim(), code: joinCode.trim() })));
+  };
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(partyCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleMovieSelect = (movie: WatchPartyMovie) => {
+    setSelectedMovie(movie);
+    sendWS({ type: "select_movie", movie });
+  };
+
+  const handleFlipDone = () => {
+    setShowCoinFlip(false);
+    setAppPhase("override");
+  };
+
+  const handleSwap = () => {
+    if (!isHost) return;
+    const swapped = [flipMovies[1], flipMovies[0]];
+    setFlipMovies(swapped);
+    setFlipWinner(swapped[0]);
+    sendWS({ type: "swap_movies" });
+  };
+
+  const handleReflip = () => {
+    if (!isHost) return;
+    const winnerIdx = Math.random() < 0.5 ? 0 : 1;
+    const ordered = [...flipMovies];
+    if (winnerIdx === 1) ordered.reverse();
+    setFlipMovies(ordered);
+    setFlipWinner(ordered[0]);
+    setShowCoinFlip(true);
+    setAppPhase("flipping");
+    sendWS({ type: "flip_result", movies: ordered });
+  };
+
+  const handleStartWatching = () => {
+    sendWS({ type: "start_watching" });
+    setAppPhase("watching");
+  };
+
+  const handleLeave = () => {
+    sendWS({ type: "leave_party" });
+    wsRef.current?.close();
+    setLocation("/");
+  };
+
+  const sendPlayback = useCallback(
+    (playing: boolean, time: number) => {
+      if (syncThrottle.current) return;
+      syncThrottle.current = setTimeout(() => { syncThrottle.current = null; }, 500);
+      sendWS({ type: "playback", playing, time });
+    },
+    [sendWS]
+  );
+
+  const togglePlay = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.play().catch(() => {});
+      setIsPlaying(true);
+      sendPlayback(true, video.currentTime);
+    } else {
+      video.pause();
+      setIsPlaying(false);
+      sendPlayback(false, video.currentTime);
+    }
+  }, [sendPlayback]);
+
+  const sendChat = () => {
+    if (!chatInput.trim()) return;
+    sendWS({ type: "chat", message: chatInput.trim() });
+    sendWS({ type: "typing", isTyping: false });
+    setChatInput("");
+  };
+
+  const handleChatInput = (val: string) => {
+    setChatInput(val);
+    sendWS({ type: "typing", isTyping: val.length > 0 });
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => sendWS({ type: "typing", isTyping: false }), 2000);
+  };
+
+  const handleNextMovie = () => {
+    if (countdownTimer.current) clearInterval(countdownTimer.current);
+    sendWS({ type: "next_movie" });
+    setCountdownSecs(null);
+    setAppPhase("watching");
+  };
+
+  const handleSaveForLater = () => {
+    if (countdownTimer.current) clearInterval(countdownTimer.current);
+    setCountdownSecs(null);
+    setAppPhase("done");
+  };
+
+  useEffect(() => {
+    if (appPhase === "between") {
+      setCountdownSecs(30);
+      countdownTimer.current = setInterval(() => {
+        setCountdownSecs((prev) => {
+          if (prev === null || prev <= 1) {
+            clearInterval(countdownTimer.current!);
+            handleNextMovie();
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => { if (countdownTimer.current) clearInterval(countdownTimer.current); };
+    }
+  }, [appPhase]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onEnded = () => {
+      if (partyState && partyState.currentMovieIdx < (partyState.movies?.length || 0) - 1) {
+        setAppPhase("between");
+      } else {
+        sendWS({ type: "end_party" });
+        setAppPhase("done");
+      }
+    };
+    const onTimeUpdate = () => setCurrentTime(video.currentTime);
+    const onDuration = () => setDuration(video.duration);
+    video.addEventListener("ended", onEnded);
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("durationchange", onDuration);
+    return () => {
+      video.removeEventListener("ended", onEnded);
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("durationchange", onDuration);
+    };
+  }, [appPhase, partyState, sendWS]);
+
+  useEffect(() => {
+    return () => {
+      wsRef.current?.close();
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      if (syncThrottle.current) clearTimeout(syncThrottle.current);
+      if (countdownTimer.current) clearInterval(countdownTimer.current);
+    };
+  }, []);
+
+  const currentMovie = partyState?.movies?.[partyState?.currentMovieIdx || 0];
+  const members = partyState?.members || [];
+  const me = members.find((m) => m.id === clientId);
+  const partner = members.find((m) => m.id !== clientId);
+  const allSelected = members.length === 2 && members.every((m) => m.hasSelected);
+
+  function formatTime(s: number) {
+    if (!s || isNaN(s)) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${String(sec).padStart(2, "0")}`;
+  }
+
+  /* ─── ENTRY SCREEN ─── */
+  if (appPhase === "entry") {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center px-4 pt-20 pb-10">
+          <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-600/20 border border-red-600/30 mb-4">
+                <Users className="h-8 w-8 text-red-500" />
+              </div>
+              <h1 className="text-3xl font-black text-white">Watch Party</h1>
+              <p className="text-gray-400 text-sm mt-2">Watch movies together in real-time with a friend</p>
+            </div>
+
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 space-y-5">
+              <div>
+                <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider block mb-1.5">Your Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (mode === "create" ? handleCreate() : handleJoin())}
+                  placeholder="Enter your name"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-red-500 transition-colors"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setMode("create")}
+                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${mode === "create" ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 hover:text-white"}`}
+                >
+                  Create Party
+                </button>
+                <button
+                  onClick={() => setMode("join")}
+                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${mode === "join" ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 hover:text-white"}`}
+                >
+                  Join Party
+                </button>
+              </div>
+
+              {mode === "join" && (
+                <div>
+                  <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider block mb-1.5">Party Code</label>
+                  <input
+                    type="text"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                    placeholder="Enter 6-digit code"
+                    maxLength={6}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-red-500 transition-colors text-center text-xl font-mono tracking-widest"
+                  />
+                </div>
+              )}
+
+              {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+
+              <button
+                onClick={mode === "create" ? handleCreate : handleJoin}
+                className="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-xl font-bold text-base transition-colors active:scale-95 flex items-center justify-center gap-2"
+              >
+                {mode === "create" ? <><Plus className="h-5 w-5" /> Create Party</> : <><ArrowRight className="h-5 w-5" /> Join Party</>}
+              </button>
+            </div>
+
+            <div className="mt-6 bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
+              <p className="text-white font-bold text-sm mb-2">How it works</p>
+              <ul className="space-y-1.5 text-gray-400 text-xs">
+                <li>1. Create a party and share the 6-digit code with your friend</li>
+                <li>2. Each of you picks a movie secretly</li>
+                <li>3. A coin flip decides which movie plays first</li>
+                <li>4. Watch together in sync with live chat</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  /* ─── LOBBY ─── */
+  if (appPhase === "lobby") {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center px-4 pt-20">
+          <div className="w-full max-w-md text-center space-y-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-600/20 border border-red-600/30">
+              <Users className="h-8 w-8 text-red-500" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-white">Party Created!</h2>
+              <p className="text-gray-400 text-sm mt-1">Share this code with your friend</p>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 space-y-4">
+              <div className="bg-zinc-800 rounded-xl p-4">
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Party Code</p>
+                <p className="text-white font-black text-5xl tracking-widest font-mono">{partyCode}</p>
+              </div>
+              <button
+                onClick={handleCopyCode}
+                className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white py-3 rounded-xl font-bold text-sm transition-colors"
+              >
+                {copied ? <><Check className="h-4 w-4 text-green-400" /> Copied!</> : <><Copy className="h-4 w-4" /> Copy Code</>}
+              </button>
+            </div>
+
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4 space-y-3">
+              <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Party Members</p>
+              {members.map((m) => (
+                <div key={m.id} className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-red-600/20 border border-red-600/30 flex items-center justify-center">
+                    <span className="text-red-400 font-bold text-sm">{m.name.charAt(0).toUpperCase()}</span>
+                  </div>
+                  <span className="text-white font-medium text-sm">{m.name}</span>
+                  {m.id === clientId && <span className="text-xs text-gray-500">(you)</span>}
+                </div>
+              ))}
+              {members.length < 2 && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 border-dashed flex items-center justify-center">
+                    <span className="text-zinc-600 text-sm">?</span>
+                  </div>
+                  <span className="text-gray-500 text-sm italic">Waiting for friend...</span>
+                  <div className="ml-auto flex gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-600 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-600 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-600 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {error && <p className="text-red-400 text-sm">{error}</p>}
+            <button onClick={handleLeave} className="text-gray-500 hover:text-red-400 text-sm transition-colors">
+              Leave Party
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  /* ─── MOVIE SELECTION ─── */
+  if (appPhase === "selecting") {
+    return (
+      <Layout>
+        <div className="pt-20 pb-10 px-4 md:px-8 max-w-screen-xl mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-black text-white">Pick Your Movie</h2>
+              <p className="text-gray-400 text-sm mt-0.5">Choose secretly — your partner won't see your pick!</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {members.map((m) => (
+                <div key={m.id} className="flex items-center gap-1.5 bg-zinc-800 rounded-full px-3 py-1.5">
+                  <div className={`w-2 h-2 rounded-full ${m.hasSelected ? "bg-green-400" : "bg-gray-600 animate-pulse"}`} />
+                  <span className="text-xs text-gray-300">{m.name}{m.id === clientId ? " (you)" : ""}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {selectedMovie && (
+            <div className="mb-6 bg-green-600/10 border border-green-600/30 rounded-xl p-4 flex items-center gap-3">
+              {selectedMovie.poster && (
+                <img src={selectedMovie.poster} alt={selectedMovie.title} className="w-10 h-14 object-cover rounded-lg" />
+              )}
+              <div>
+                <p className="text-green-400 font-bold text-sm">You picked: {selectedMovie.title}</p>
+                <p className="text-gray-400 text-xs mt-0.5">{allSelected ? "Both picked! Coin flip starting soon..." : "Waiting for your partner..."}</p>
+              </div>
+            </div>
+          )}
+
+          {!selectedMovie && (
+            <div className="mb-4 text-center py-4 bg-zinc-900/50 border border-zinc-800 border-dashed rounded-xl">
+              <p className="text-gray-400 text-sm">Tap a movie to select it</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+            {trending.slice(0, 24).map((item) => (
+              <MoviePickCard
+                key={item.subjectId}
+                item={item}
+                selected={selectedMovie?.id === item.subjectId}
+                onSelect={handleMovieSelect}
+              />
+            ))}
+          </div>
+
+          <div className="mt-6 flex justify-center">
+            <button onClick={handleLeave} className="text-gray-500 hover:text-red-400 text-sm transition-colors">
+              Leave Party
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  /* ─── COIN FLIP ─── */
+  if (appPhase === "flipping") {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center px-4 pt-20">
+          <div className="w-full max-w-md text-center space-y-6">
+            <h2 className="text-2xl font-black text-white">🎲 Coin Flip!</h2>
+            <p className="text-gray-400 text-sm">Both movies picked. Let fate decide which goes first!</p>
+
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6">
+              {showCoinFlip && flipWinner ? (
+                <CoinFlip winner={flipWinner} onDone={handleFlipDone} />
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex gap-4 justify-center">
+                    {flipMovies.map((m, i) => (
+                      <div key={i} className="flex flex-col items-center gap-2">
+                        <div className="w-20 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-800">
+                          {m.poster && <img src={m.poster} alt={m.title} className="w-full h-full object-cover" />}
+                        </div>
+                        <p className="text-white text-xs font-semibold line-clamp-2 text-center max-w-[80px]">{m.title}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-bounce" />
+                    <p className="text-gray-400 text-sm">Preparing coin flip...</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  /* ─── OVERRIDE / POST-FLIP ─── */
+  if (appPhase === "override") {
+    const winner = flipMovies[0];
+    const second = flipMovies[1];
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center px-4 pt-20">
+          <div className="w-full max-w-md space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-black text-white">Coin Flip Result</h2>
+              <p className="text-gray-400 text-sm mt-1">The coin has spoken — but you can override!</p>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-5 space-y-4">
+              <div>
+                <p className="text-xs text-yellow-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Crown className="h-3.5 w-3.5" /> Playing First
+                </p>
+                <div className="flex items-center gap-3 bg-zinc-800 rounded-xl px-4 py-3">
+                  {winner?.poster && <img src={winner.poster} alt={winner.title} className="w-10 h-14 object-cover rounded-lg" />}
+                  <div>
+                    <p className="text-white font-bold">{winner?.title}</p>
+                    {winner?.year && <p className="text-gray-400 text-xs">{winner.year}</p>}
+                  </div>
+                </div>
+              </div>
+              {second && (
+                <div>
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Playing Second</p>
+                  <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+                    {second.poster && <img src={second.poster} alt={second.title} className="w-8 h-11 object-cover rounded-lg opacity-70" />}
+                    <p className="text-gray-400 text-sm">{second.title}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleStartWatching}
+                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white py-4 rounded-xl font-bold text-base transition-colors active:scale-95"
+              >
+                <Play className="h-5 w-5 fill-current" /> Start Watching
+              </button>
+              {isHost && (
+                <>
+                  <button
+                    onClick={handleSwap}
+                    className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white py-3 rounded-xl font-bold text-sm transition-colors"
+                  >
+                    <Shuffle className="h-4 w-4" /> Swap Order
+                  </button>
+                  <button
+                    onClick={handleReflip}
+                    className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white py-3 rounded-xl font-bold text-sm transition-colors"
+                  >
+                    <RefreshCw className="h-4 w-4" /> Flip Again
+                  </button>
+                </>
+              )}
+              {!isHost && (
+                <p className="text-center text-gray-500 text-xs">Only the party host can swap or reflip</p>
+              )}
+            </div>
+            <div className="text-center">
+              <button onClick={handleLeave} className="text-gray-500 hover:text-red-400 text-sm transition-colors">Leave Party</button>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  /* ─── WATCHING ─── */
+  if (appPhase === "watching" || appPhase === "between") {
+    const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+    return (
+      <div className="h-screen w-full bg-black flex flex-col overflow-hidden">
+        {/* Top bar */}
+        <div className="flex items-center justify-between px-4 py-3 bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-800 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <button onClick={handleLeave} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <p className="text-white font-bold text-sm line-clamp-1">{currentMovie?.title || "Watch Party"}</p>
+              <div className="flex items-center gap-2">
+                {members.map((m) => (
+                  <span key={m.id} className="text-xs text-gray-400 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                    {m.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowChat((v) => !v)}
+            className={`p-2 rounded-lg border transition-colors ${showChat ? "bg-red-600/20 border-red-600/40 text-red-400" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* Video area */}
+          <div className="flex-1 flex flex-col bg-black relative">
+            <div className="flex-1 flex items-center justify-center relative">
+              {currentMovie ? (
+                <video
+                  ref={videoRef}
+                  key={currentMovie.id}
+                  className="max-h-full max-w-full"
+                  playsInline
+                  onClick={togglePlay}
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-4 text-white">
+                  <Play className="h-12 w-12 text-zinc-700" />
+                  <p className="text-gray-500 text-sm">Stream not available — watching together</p>
+                </div>
+              )}
+
+              {/* Sync indicator */}
+              {syncPending && (
+                <div className="absolute top-4 right-4 bg-black/70 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-red-400" />
+                  <span className="text-xs text-gray-300">Syncing...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Controls */}
+            <div className="px-4 pb-4 pt-3 space-y-2 flex-shrink-0">
+              <div className="w-full h-1.5 bg-zinc-800 rounded-full cursor-pointer" onClick={(e) => {
+                if (!videoRef.current || !duration) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const pct = (e.clientX - rect.left) / rect.width;
+                const time = pct * duration;
+                videoRef.current.currentTime = time;
+                sendPlayback(isPlaying, time);
+              }}>
+                <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={togglePlay} className="w-10 h-10 flex items-center justify-center text-white hover:scale-110 transition-transform">
+                  {isPlaying ? <Pause className="h-7 w-7 fill-current" /> : <Play className="h-7 w-7 fill-current" />}
+                </button>
+                <span className="text-white text-sm font-mono">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                <div className="flex-1" />
+                <button onClick={() => {
+                  if (videoRef.current) {
+                    videoRef.current.muted = !videoRef.current.muted;
+                    setIsMuted(v => !v);
+                  }
+                }} className="text-gray-400 hover:text-white transition-colors p-1">
+                  {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Chat panel */}
+          {showChat && (
+            <div className="w-72 flex flex-col bg-zinc-950 border-l border-zinc-800 flex-shrink-0">
+              <div className="px-4 py-3 border-b border-zinc-800 flex-shrink-0">
+                <p className="text-white font-bold text-sm">Party Chat</p>
+                {typingFrom && (
+                  <p className="text-gray-500 text-xs mt-0.5 italic">{typingFrom} is typing...</p>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`flex flex-col ${msg.from === (me?.name || name) ? "items-end" : "items-start"}`}>
+                    <span className="text-xs text-gray-500 mb-0.5">{msg.from}</span>
+                    <div className={`max-w-[85%] px-3 py-2 rounded-xl text-sm ${msg.from === (me?.name || name) ? "bg-red-600 text-white rounded-br-sm" : "bg-zinc-800 text-gray-200 rounded-bl-sm"}`}>
+                      {msg.message}
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="p-3 border-t border-zinc-800 flex-shrink-0">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => handleChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && sendChat()}
+                    placeholder="Say something..."
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-red-500 transition-colors"
+                  />
+                  <button onClick={sendChat} className="w-9 h-9 bg-red-600 hover:bg-red-700 rounded-xl flex items-center justify-center transition-colors flex-shrink-0">
+                    <Send className="h-4 w-4 text-white" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Between movies prompt */}
+        {appPhase === "between" && (
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl p-6 space-y-5">
+              <div className="text-center">
+                <p className="text-white font-black text-xl">🎬 Movie Ended!</p>
+                <p className="text-gray-400 text-sm mt-1">Ready for the next one?</p>
+              </div>
+              {partyState?.movies?.[1] && (
+                <div className="flex items-center gap-3 bg-zinc-800 rounded-xl px-4 py-3">
+                  {partyState.movies[1].poster && (
+                    <img src={partyState.movies[1].poster} alt={partyState.movies[1].title} className="w-10 h-14 object-cover rounded-lg" />
+                  )}
+                  <div>
+                    <p className="text-xs text-gray-400">Up next</p>
+                    <p className="text-white font-bold text-sm">{partyState.movies[1].title}</p>
+                  </div>
+                </div>
+              )}
+              {countdownSecs !== null && (
+                <div className="text-center">
+                  <p className="text-gray-400 text-xs">Auto-playing in</p>
+                  <p className="text-red-400 font-black text-3xl">{countdownSecs}s</p>
+                </div>
+              )}
+              <div className="space-y-2">
+                {isHost && (
+                  <button onClick={handleNextMovie} className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold text-sm transition-colors">
+                    <SkipForward className="h-4 w-4" /> Watch Next Movie Now
+                  </button>
+                )}
+                <button onClick={handleSaveForLater} className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white py-3 rounded-xl font-bold text-sm transition-colors">
+                  <X className="h-4 w-4" /> End Party
+                </button>
+              </div>
+              {!isHost && <p className="text-center text-gray-500 text-xs">Waiting for host to continue...</p>}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* ─── DONE / CELEBRATION ─── */
+  if (appPhase === "done") {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center px-4 pt-20">
+          <div className="w-full max-w-md text-center space-y-6">
+            <div className="text-6xl">🎉</div>
+            <div>
+              <h2 className="text-3xl font-black text-white">Party Complete!</h2>
+              <p className="text-gray-400 text-sm mt-2">You and your friend watched {partyState?.movies?.length || 0} movie{(partyState?.movies?.length || 0) !== 1 ? "s" : ""} together</p>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-5 space-y-3">
+              <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Movies Watched</p>
+              {(partyState?.movies || []).map((m, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  {m.poster && <img src={m.poster} alt={m.title} className="w-10 h-14 object-cover rounded-lg" />}
+                  <div className="text-left">
+                    <p className="text-white font-semibold text-sm">{m.title}</p>
+                    {m.year && <p className="text-gray-400 text-xs">{m.year}</p>}
+                  </div>
+                  {i === 0 && <Crown className="h-4 w-4 text-yellow-400 ml-auto" />}
+                </div>
+              ))}
+
+              <div className="border-t border-zinc-800 pt-3">
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2">Party Members</p>
+                {members.map((m) => (
+                  <p key={m.id} className="text-white text-sm">{m.name}{m.id === clientId ? " (you)" : ""}</p>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  sendWS({ type: "leave_party" });
+                  wsRef.current?.close();
+                  setAppPhase("entry");
+                  setPartyState(null);
+                  setPartyCode("");
+                  setSelectedMovie(null);
+                  setFlipMovies([]);
+                  setChatMessages([]);
+                  setName("");
+                }}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold text-sm transition-colors"
+              >
+                New Party
+              </button>
+              <Link href="/" className="flex-1">
+                <button className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white py-3 rounded-xl font-bold text-sm transition-colors">
+                  Go Home
+                </button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  return null;
+}

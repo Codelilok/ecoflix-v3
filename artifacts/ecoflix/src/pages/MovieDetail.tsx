@@ -50,6 +50,7 @@ export default function MovieDetail() {
   const genres = getGenres(movie);
   const isSaved = isInWishlist(movie.subjectId);
   const streams: Stream[] = streamData?.streams || [];
+  const subtitles: any[] = (streamData as any)?.data?.subtitles || (streamData as any)?.subtitles || [];
 
   const handleStreamSelect = (stream: Stream) => {
     const url = stream.proxyUrl || stream.url;
@@ -216,6 +217,7 @@ export default function MovieDetail() {
         streams={streams}
         title={title}
         mode="download"
+        subtitles={subtitles}
       />
     </Layout>
   );
