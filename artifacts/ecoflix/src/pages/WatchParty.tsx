@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
-import { useTrending } from "@/hooks/use-ecoflix";
+import { useTrending, useSearch, useBrowse } from "@/hooks/use-ecoflix";
 import { getTitle, getPoster, getYear } from "@/lib/utils";
 import { MediaItem } from "@/lib/api-types";
 import {
   Users, Plus, ArrowRight, Copy, Check, RefreshCw, Play, Pause,
   Volume2, VolumeX, Send, X, ChevronLeft, Shuffle,
   SkipForward, Star, Coins, Crown, Tv, ChevronDown, Loader2, List,
-  LogOut, Minus, MessageSquare,
+  LogOut, Minus, MessageSquare, RotateCcw, RotateCw, Search,
 } from "lucide-react";
 
 const API_BASE = "https://movieapi.xcasper.space/api";
@@ -148,6 +148,8 @@ function WatchPartyEpisodePicker({
   const [loading, setLoading] = useState(true);
   const [selectedSeason, setSelectedSeason] = useState<number>(1);
   const [selectedEpisode, setSelectedEpisode] = useState<number>(1);
+  const [manualSeason, setManualSeason] = useState<number>(1);
+  const [manualEpisode, setManualEpisode] = useState<number>(1);
 
   useEffect(() => {
     setLoading(true);
@@ -189,6 +191,19 @@ function WatchPartyEpisodePicker({
     });
   };
 
+  const handleManualConfirm = () => {
+    onConfirm({
+      id: item.subjectId,
+      type: "tv",
+      title,
+      poster: poster || "",
+      year: getYear(item) || "",
+      season: String(manualSeason),
+      episode: String(manualEpisode),
+      episodeTitle: `Episode ${manualEpisode}`,
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
@@ -217,7 +232,32 @@ function WatchPartyEpisodePicker({
               <Loader2 className="h-7 w-7 animate-spin text-red-500" />
             </div>
           ) : seasons.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-4">No episode data available</p>
+            /* Manual +/- picker when API has no episode data */
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs text-gray-400 font-semibold mb-2">Season</p>
+                <div className="flex items-center gap-3 bg-zinc-800 rounded-xl px-3 py-2.5 border border-zinc-700">
+                  <button onClick={() => setManualSeason(Math.max(1, manualSeason - 1))} className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0">
+                    <Minus className="h-3.5 w-3.5 text-white" />
+                  </button>
+                  <span className="flex-1 text-center text-white font-black text-2xl">{manualSeason}</span>
+                  <button onClick={() => setManualSeason(manualSeason + 1)} className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0 text-white font-bold text-lg">+</button>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 font-semibold mb-2">Episode</p>
+                <div className="flex items-center gap-3 bg-zinc-800 rounded-xl px-3 py-2.5 border border-zinc-700">
+                  <button onClick={() => setManualEpisode(Math.max(1, manualEpisode - 1))} className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0">
+                    <Minus className="h-3.5 w-3.5 text-white" />
+                  </button>
+                  <span className="flex-1 text-center text-white font-black text-2xl">{manualEpisode}</span>
+                  <button onClick={() => setManualEpisode(manualEpisode + 1)} className="w-8 h-8 rounded-full bg-zinc-700 hover:bg-red-600 flex items-center justify-center transition-colors flex-shrink-0 text-white font-bold text-lg">+</button>
+                </div>
+              </div>
+              <button onClick={handleManualConfirm} className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2">
+                <Check className="h-4 w-4" /> S{manualSeason} · E{manualEpisode} — Add to Queue
+              </button>
+            </div>
           ) : (
             <>
               <div>
@@ -341,10 +381,27 @@ function MoviePickCard({
   );
 }
 
+const SELECTION_GENRES = ["Action", "Drama", "Comedy", "Romance", "Thriller", "Sci-Fi", "Horror", "Animation", "Crime", "Adventure"];
+
 /* ─── Main Component ─── */
 export default function WatchParty() {
   const [, setLocation] = useLocation();
+
+  /* Selection browse/search state — declared BEFORE hook calls that use them */
+  const [selectionMode, setSelectionMode] = useState<"trending" | "genre" | "search">("trending");
+  const [selectionGenre, setSelectionGenre] = useState("Action");
+  const [selectionSearchInput, setSelectionSearchInput] = useState("");
+  const [selectionSearch, setSelectionSearch] = useState("");
+
   const { data: trending = [] } = useTrending();
+  const { data: browseData } = useBrowse(selectionGenre, 1);
+  const browseItems: MediaItem[] = browseData?.items || [];
+  const { data: searchItems = [] } = useSearch(selectionSearch);
+
+  const selectionItems: MediaItem[] =
+    selectionMode === "search" ? searchItems.slice(0, 30) :
+    selectionMode === "genre"  ? browseItems.slice(0, 30) :
+    trending.slice(0, 30);
 
   const [appPhase, setAppPhase] = useState<AppPhase>("entry");
   const [name, setName] = useState("");
@@ -1041,8 +1098,57 @@ export default function WatchParty() {
             </div>
           )}
 
+          {/* Search + Genre filter bar */}
+          <div className="mb-4 space-y-3">
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+              <input
+                type="text"
+                value={selectionSearchInput}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSelectionSearchInput(v);
+                  if (v.length > 1) {
+                    setSelectionMode("search");
+                    setSelectionSearch(v);
+                  } else if (v.length === 0) {
+                    setSelectionMode("trending");
+                    setSelectionSearch("");
+                  }
+                }}
+                placeholder="Search any movie or show..."
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-red-500/60 transition-colors"
+              />
+              {selectionSearchInput && (
+                <button onClick={() => { setSelectionSearchInput(""); setSelectionSearch(""); setSelectionMode("trending"); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Genre / Trending tabs */}
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <button
+                onClick={() => { setSelectionMode("trending"); setSelectionSearchInput(""); setSelectionSearch(""); }}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${selectionMode === "trending" ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 hover:text-white"}`}
+              >
+                Trending
+              </button>
+              {SELECTION_GENRES.map((g) => (
+                <button
+                  key={g}
+                  onClick={() => { setSelectionMode("genre"); setSelectionGenre(g); setSelectionSearchInput(""); setSelectionSearch(""); }}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${selectionMode === "genre" && selectionGenre === g ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 hover:text-white"}`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-            {trending.slice(0, 24).map((item) => (
+            {selectionItems.map((item) => (
               <MoviePickCard
                 key={item.subjectId}
                 item={item}
@@ -1051,6 +1157,11 @@ export default function WatchParty() {
                 onOpenEpisodePicker={selectionConfirmed ? () => {} : (it) => setEpisodePickerItem(it)}
               />
             ))}
+            {selectionItems.length === 0 && selectionMode === "search" && selectionSearch.length > 1 && (
+              <div className="col-span-full py-12 text-center">
+                <p className="text-gray-500 text-sm">No results for "{selectionSearch}"</p>
+              </div>
+            )}
           </div>
 
           {episodePickerItem && (
@@ -1342,8 +1453,32 @@ export default function WatchParty() {
                 <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    if (!videoRef.current) return;
+                    const t = Math.max(0, videoRef.current.currentTime - 10);
+                    videoRef.current.currentTime = t;
+                    sendPlayback(isPlaying, t);
+                  }}
+                  className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                  title="Rewind 10s"
+                >
+                  <RotateCcw className="h-5 w-5" />
+                </button>
                 <button onClick={togglePlay} className="w-10 h-10 flex items-center justify-center text-white hover:scale-110 transition-transform">
                   {isPlaying ? <Pause className="h-7 w-7 fill-current" /> : <Play className="h-7 w-7 fill-current" />}
+                </button>
+                <button
+                  onClick={() => {
+                    if (!videoRef.current || !duration) return;
+                    const t = Math.min(duration, videoRef.current.currentTime + 10);
+                    videoRef.current.currentTime = t;
+                    sendPlayback(isPlaying, t);
+                  }}
+                  className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                  title="Forward 10s"
+                >
+                  <RotateCw className="h-5 w-5" />
                 </button>
                 <span className="text-white text-sm font-mono">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <div className="flex-1" />
