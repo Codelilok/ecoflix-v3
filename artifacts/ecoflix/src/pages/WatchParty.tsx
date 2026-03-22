@@ -427,6 +427,8 @@ export default function WatchParty() {
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [showChat, setShowChat] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const showChatRef = useRef(true);
   const [countdownSecs, setCountdownSecs] = useState<number | null>(null);
   const [syncPending, setSyncPending] = useState(false);
   const [currentStreamUrl, setCurrentStreamUrl] = useState<string>("");
@@ -458,6 +460,9 @@ export default function WatchParty() {
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncThrottle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /* keep showChatRef in sync so WS handler can read it without stale closure */
+  useEffect(() => { showChatRef.current = showChat; }, [showChat]);
 
   const sendWS = useCallback((msg: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -548,6 +553,7 @@ export default function WatchParty() {
           }
         } else if (msg.type === "chat") {
           setChatMessages((prev) => [...prev, { from: msg.from, message: msg.message, ts: msg.ts }]);
+          if (!showChatRef.current) setUnreadCount((n) => n + 1);
           setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         } else if (msg.type === "typing") {
           setTypingFrom(msg.isTyping ? msg.from : null);
@@ -1029,118 +1035,95 @@ export default function WatchParty() {
   if (appPhase === "selecting") {
     return (
       <Layout>
-        <div className="pt-16 sm:pt-20 pb-10 px-3 sm:px-4 md:px-8 max-w-screen-xl mx-auto">
-          {/* Header — stacks on mobile */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-black text-white">Pick Your Movies</h2>
-              <p className="text-gray-400 text-xs sm:text-sm mt-0.5">Choose up to 2 movies secretly — your partner won't see your picks!</p>
+        <div className="pt-16 pb-6 px-3 md:px-6 max-w-screen-xl mx-auto">
+
+          {/* ── Compact single-row header ── */}
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-sm font-black text-white leading-none">Pick Your Movies</h2>
+              <p className="text-gray-500 text-[11px] mt-px hidden sm:block">Choose up to 2 secretly</p>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {members.map((m) => (
-                <div key={m.id} className="flex items-center gap-1.5 bg-zinc-800 rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5">
-                  <div className={`w-2 h-2 rounded-full ${m.hasSelected ? "bg-green-400" : "bg-gray-600 animate-pulse"}`} />
-                  <span className="text-xs text-gray-300">{m.name}{m.id === clientId ? " (you)" : ""}</span>
-                </div>
-              ))}
-            </div>
+            {members.map((m) => (
+              <div key={m.id} className="flex items-center gap-1 bg-zinc-800/80 rounded-full px-2 py-1 border border-zinc-700/50 flex-shrink-0">
+                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${m.hasSelected ? "bg-green-400" : "bg-yellow-500 animate-pulse"}`} />
+                <span className="text-[11px] text-gray-400 max-w-[55px] truncate">{m.name}{m.id === clientId ? " ✓" : ""}</span>
+              </div>
+            ))}
           </div>
 
-          {/* Selection status bar */}
+          {/* ── Inline status bar ── */}
           {selectionConfirmed ? (
-            <div className="mb-4 bg-green-600/10 border border-green-600/30 rounded-xl p-3 sm:p-4">
-              <p className="text-green-400 font-bold text-sm mb-2">Your picks are locked in!</p>
-              <div className="flex gap-2 sm:gap-3 flex-wrap">
+            <div className="mb-2 bg-green-600/10 border border-green-600/30 rounded-lg px-3 py-2 flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
                 {selectedMovies.map((m) => (
-                  <div key={m.id} className="flex items-center gap-2">
-                    {m.poster && <img src={m.poster} alt={m.title} className="w-8 h-11 object-cover rounded" />}
-                    <div className="flex flex-col">
-                      <span className="text-gray-300 text-xs">{m.title}</span>
-                      {m.season && m.episode && (
-                        <span className="text-gray-500 text-[10px]">S{m.season}E{m.episode}</span>
-                      )}
-                    </div>
+                  <div key={m.id} className="flex items-center gap-1.5">
+                    {m.poster && <img src={m.poster} alt={m.title} className="w-6 h-8 object-cover rounded" />}
+                    <span className="text-green-300 text-xs font-semibold line-clamp-1 max-w-[70px]">{m.title}</span>
                   </div>
                 ))}
               </div>
-              <p className="text-gray-400 text-xs mt-2">{allSelected ? "Both picked! Coin flip starting soon..." : "Waiting for your partner..."}</p>
+              <p className="text-gray-500 text-[11px] flex-shrink-0">{allSelected ? "Flip coming…" : "Waiting…"}</p>
+            </div>
+          ) : selectedMovies.length > 0 ? (
+            <div className="mb-2 bg-zinc-900/80 border border-zinc-700 rounded-lg px-3 py-2 flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                {selectedMovies.map((m, idx) => (
+                  <div key={m.id} className="flex items-center gap-1">
+                    <span className="text-gray-600 text-[10px] font-bold">#{idx+1}</span>
+                    {m.poster && <img src={m.poster} alt={m.title} className="w-6 h-8 object-cover rounded" />}
+                    <span className="text-gray-300 text-xs line-clamp-1 max-w-[60px]">{m.title}</span>
+                  </div>
+                ))}
+                <span className="text-gray-600 text-[10px]">{selectedMovies.length}/2</span>
+              </div>
+              <button
+                onClick={handleConfirmSelection}
+                className="flex-shrink-0 bg-green-600 hover:bg-green-500 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+              >
+                Lock In ✓
+              </button>
             </div>
           ) : (
-            <div className="mb-3 sm:mb-4">
-              {selectedMovies.length > 0 ? (
-                <div className="bg-zinc-900/80 border border-zinc-700 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-                    {selectedMovies.map((m, idx) => (
-                      <div key={m.id} className="flex items-center gap-1.5">
-                        <span className="text-gray-500 text-xs font-bold">#{idx + 1}</span>
-                        {m.poster && <img src={m.poster} alt={m.title} className="w-8 h-11 object-cover rounded" />}
-                        <div className="flex flex-col">
-                          <span className="text-gray-300 text-xs max-w-[80px] line-clamp-1">{m.title}</span>
-                          {m.season && m.episode && (
-                            <span className="text-gray-500 text-[10px]">S{m.season}E{m.episode}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    <span className="text-gray-600 text-xs">{selectedMovies.length}/2</span>
-                  </div>
-                  <button
-                    onClick={handleConfirmSelection}
-                    className="w-full sm:w-auto flex-shrink-0 bg-green-600 hover:bg-green-500 active:scale-95 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all"
-                  >
-                    Lock In Picks ✓
-                  </button>
-                </div>
-              ) : (
-                <div className="mb-1 text-center py-3 bg-zinc-900/50 border border-zinc-800 border-dashed rounded-xl">
-                  <p className="text-gray-400 text-xs sm:text-sm">Tap up to 2 movies to add them to your queue</p>
-                </div>
-              )}
+            <div className="mb-2 text-center py-2 bg-zinc-900/40 border border-zinc-800 border-dashed rounded-lg">
+              <p className="text-gray-500 text-xs">Tap up to 2 movies to add to your queue</p>
             </div>
           )}
 
-          {/* Search + Genre filter bar */}
-          <div className="mb-4 space-y-3">
-            {/* Search input */}
+          {/* ── Search + Genre in one compact block ── */}
+          <div className="mb-2 space-y-1.5">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500 pointer-events-none" />
               <input
                 type="text"
                 value={selectionSearchInput}
                 onChange={(e) => {
                   const v = e.target.value;
                   setSelectionSearchInput(v);
-                  if (v.length > 1) {
-                    setSelectionMode("search");
-                    setSelectionSearch(v);
-                  } else if (v.length === 0) {
-                    setSelectionMode("trending");
-                    setSelectionSearch("");
-                  }
+                  if (v.length > 1) { setSelectionMode("search"); setSelectionSearch(v); }
+                  else if (v.length === 0) { setSelectionMode("trending"); setSelectionSearch(""); }
                 }}
-                placeholder="Search any movie or show..."
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-red-500/60 transition-colors"
+                placeholder="Search movies & shows…"
+                className="w-full bg-zinc-900 border border-zinc-700/60 rounded-lg pl-8 pr-8 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-red-500/50 transition-colors"
               />
               {selectionSearchInput && (
-                <button onClick={() => { setSelectionSearchInput(""); setSelectionSearch(""); setSelectionMode("trending"); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-                  <X className="h-4 w-4" />
+                <button onClick={() => { setSelectionSearchInput(""); setSelectionSearch(""); setSelectionMode("trending"); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Genre / Trending tabs */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
               <button
                 onClick={() => { setSelectionMode("trending"); setSelectionSearchInput(""); setSelectionSearch(""); }}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${selectionMode === "trending" ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 hover:text-white"}`}
+                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${selectionMode === "trending" ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400"}`}
               >
-                Trending
+                🔥 Trending
               </button>
               {SELECTION_GENRES.map((g) => (
                 <button
                   key={g}
                   onClick={() => { setSelectionMode("genre"); setSelectionGenre(g); setSelectionSearchInput(""); setSelectionSearch(""); }}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${selectionMode === "genre" && selectionGenre === g ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400 hover:text-white"}`}
+                  className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${selectionMode === "genre" && selectionGenre === g ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400"}`}
                 >
                   {g}
                 </button>
@@ -1148,7 +1131,8 @@ export default function WatchParty() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+          {/* ── Movie grid ── */}
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
             {selectionItems.map((item) => (
               <MoviePickCard
                 key={item.subjectId}
@@ -1159,7 +1143,7 @@ export default function WatchParty() {
               />
             ))}
             {selectionItems.length === 0 && selectionMode === "search" && selectionSearch.length > 1 && (
-              <div className="col-span-full py-12 text-center">
+              <div className="col-span-full py-10 text-center">
                 <p className="text-gray-500 text-sm">No results for "{selectionSearch}"</p>
               </div>
             )}
@@ -1168,16 +1152,13 @@ export default function WatchParty() {
           {episodePickerItem && (
             <WatchPartyEpisodePicker
               item={episodePickerItem}
-              onConfirm={(movie) => {
-                handleMovieToggle(movie);
-                setEpisodePickerItem(null);
-              }}
+              onConfirm={(movie) => { handleMovieToggle(movie); setEpisodePickerItem(null); }}
               onClose={() => setEpisodePickerItem(null)}
             />
           )}
 
-          <div className="mt-6 flex justify-center">
-            <button onClick={handleLeave} className="text-gray-500 hover:text-red-400 text-sm transition-colors">
+          <div className="mt-4 flex justify-center">
+            <button onClick={handleLeave} className="text-gray-600 hover:text-red-400 text-xs transition-colors">
               Leave Party
             </button>
           </div>
@@ -1326,11 +1307,16 @@ export default function WatchParty() {
             ))}
           </div>
           <button
-            onClick={() => setShowChat((v) => !v)}
-            className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-colors flex-shrink-0 ${showChat ? "bg-red-600/20 border-red-500/40 text-red-400" : "bg-zinc-800/80 border-zinc-700/60 text-gray-400 hover:text-white"}`}
+            onClick={() => { setShowChat((v) => !v); setUnreadCount(0); }}
+            className={`relative w-9 h-9 flex items-center justify-center rounded-xl border transition-colors flex-shrink-0 ${showChat ? "bg-red-600/20 border-red-500/40 text-red-400" : "bg-zinc-800/80 border-zinc-700/60 text-gray-400 hover:text-white"}`}
             title="Toggle Chat"
           >
             <MessageSquare className="h-4 w-4" />
+            {unreadCount > 0 && !showChat && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1 leading-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
         </div>
 
