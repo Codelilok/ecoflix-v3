@@ -392,16 +392,29 @@ export default function WatchParty() {
   const [selectionGenre, setSelectionGenre] = useState("Action");
   const [selectionSearchInput, setSelectionSearchInput] = useState("");
   const [selectionSearch, setSelectionSearch] = useState("");
+  const [selectionPage, setSelectionPage] = useState(0);
 
   const { data: trending = [] } = useTrending();
   const { data: browseData } = useBrowse(selectionGenre, 1);
   const browseItems: MediaItem[] = browseData?.items || [];
   const { data: searchItems = [] } = useSearch(selectionSearch);
 
+  const ITEMS_PER_PAGE = 12;
+
   const selectionItems: MediaItem[] =
-    selectionMode === "search" ? searchItems.slice(0, 30) :
-    selectionMode === "genre"  ? browseItems.slice(0, 30) :
-    trending.slice(0, 30);
+    selectionMode === "search" ? searchItems :
+    selectionMode === "genre"  ? browseItems :
+    trending;
+
+  const totalSelectionPages = Math.max(1, Math.ceil(selectionItems.length / ITEMS_PER_PAGE));
+  const selectionPageItems = selectionItems.slice(selectionPage * ITEMS_PER_PAGE, (selectionPage + 1) * ITEMS_PER_PAGE);
+
+  const changeSelectionMode = (mode: "trending" | "genre" | "search", genre?: string, search?: string) => {
+    setSelectionMode(mode);
+    setSelectionPage(0);
+    if (genre !== undefined) setSelectionGenre(genre);
+    if (search !== undefined) setSelectionSearch(search);
+  };
 
   const [appPhase, setAppPhase] = useState<AppPhase>("entry");
   const [name, setName] = useState("");
@@ -1034,136 +1047,167 @@ export default function WatchParty() {
   /* ─── MOVIE SELECTION ─── */
   if (appPhase === "selecting") {
     return (
-      <Layout>
-        <div className="pt-16 pb-6 px-3 md:px-6 max-w-screen-xl mx-auto">
+      <div className="h-screen w-full bg-zinc-950 flex flex-col overflow-hidden">
 
-          {/* ── Compact single-row header ── */}
-          <div className="flex items-center gap-2 mb-2">
-            <div className="flex-1 min-w-0">
-              <h2 className="text-sm font-black text-white leading-none">Pick Your Movies</h2>
-              <p className="text-gray-500 text-[11px] mt-px hidden sm:block">Choose up to 2 secretly</p>
-            </div>
+        {/* ── Top bar ── */}
+        <div className="flex-shrink-0 flex items-center gap-2 px-3 pt-12 pb-2 border-b border-zinc-800/60">
+          <button onClick={handleLeave} className="w-8 h-8 flex items-center justify-center rounded-lg bg-zinc-800/80 text-gray-400 hover:text-red-400 transition-colors flex-shrink-0">
+            <LogOut className="h-4 w-4" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-black leading-none">Pick Your Movies</p>
+            <p className="text-gray-500 text-[10px] mt-px">Choose up to 2 secretly</p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {members.map((m) => (
-              <div key={m.id} className="flex items-center gap-1 bg-zinc-800/80 rounded-full px-2 py-1 border border-zinc-700/50 flex-shrink-0">
+              <div key={m.id} className="flex items-center gap-1 bg-zinc-800 rounded-full px-2 py-1">
                 <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${m.hasSelected ? "bg-green-400" : "bg-yellow-500 animate-pulse"}`} />
-                <span className="text-[11px] text-gray-400 max-w-[55px] truncate">{m.name}{m.id === clientId ? " ✓" : ""}</span>
+                <span className="text-[10px] text-gray-400 max-w-[48px] truncate">{m.name}</span>
               </div>
             ))}
           </div>
+        </div>
 
-          {/* ── Inline status bar ── */}
+        {/* ── Status strip ── */}
+        <div className="flex-shrink-0 px-3 pt-1.5 pb-1">
           {selectionConfirmed ? (
-            <div className="mb-2 bg-green-600/10 border border-green-600/30 rounded-lg px-3 py-2 flex items-center gap-2">
-              <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+            <div className="bg-green-600/10 border border-green-600/30 rounded-lg px-3 py-1.5 flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
                 {selectedMovies.map((m) => (
-                  <div key={m.id} className="flex items-center gap-1.5">
-                    {m.poster && <img src={m.poster} alt={m.title} className="w-6 h-8 object-cover rounded" />}
-                    <span className="text-green-300 text-xs font-semibold line-clamp-1 max-w-[70px]">{m.title}</span>
+                  <div key={m.id} className="flex items-center gap-1">
+                    {m.poster && <img src={m.poster} alt={m.title} className="w-5 h-7 object-cover rounded" />}
+                    <span className="text-green-300 text-[11px] font-semibold line-clamp-1 max-w-[65px]">{m.title}</span>
                   </div>
                 ))}
               </div>
-              <p className="text-gray-500 text-[11px] flex-shrink-0">{allSelected ? "Flip coming…" : "Waiting…"}</p>
+              <span className="text-gray-500 text-[10px] flex-shrink-0">{allSelected ? "Flip coming…" : "Waiting…"}</span>
             </div>
           ) : selectedMovies.length > 0 ? (
-            <div className="mb-2 bg-zinc-900/80 border border-zinc-700 rounded-lg px-3 py-2 flex items-center gap-2">
-              <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
                 {selectedMovies.map((m, idx) => (
                   <div key={m.id} className="flex items-center gap-1">
-                    <span className="text-gray-600 text-[10px] font-bold">#{idx+1}</span>
-                    {m.poster && <img src={m.poster} alt={m.title} className="w-6 h-8 object-cover rounded" />}
-                    <span className="text-gray-300 text-xs line-clamp-1 max-w-[60px]">{m.title}</span>
+                    <span className="text-gray-600 text-[9px] font-black">#{idx + 1}</span>
+                    {m.poster && <img src={m.poster} alt={m.title} className="w-5 h-7 object-cover rounded" />}
+                    <span className="text-gray-300 text-[11px] line-clamp-1 max-w-[55px]">{m.title}</span>
                   </div>
                 ))}
-                <span className="text-gray-600 text-[10px]">{selectedMovies.length}/2</span>
+                <span className="text-gray-600 text-[9px]">{selectedMovies.length}/2</span>
               </div>
-              <button
-                onClick={handleConfirmSelection}
-                className="flex-shrink-0 bg-green-600 hover:bg-green-500 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
-              >
+              <button onClick={handleConfirmSelection} className="flex-shrink-0 bg-green-600 hover:bg-green-500 active:scale-95 text-white text-[11px] font-black px-3 py-1.5 rounded-lg transition-all">
                 Lock In ✓
               </button>
             </div>
           ) : (
-            <div className="mb-2 text-center py-2 bg-zinc-900/40 border border-zinc-800 border-dashed rounded-lg">
-              <p className="text-gray-500 text-xs">Tap up to 2 movies to add to your queue</p>
+            <div className="text-center py-1.5 border border-zinc-800 border-dashed rounded-lg">
+              <p className="text-gray-600 text-[11px]">Tap up to 2 movies to add to your queue</p>
             </div>
           )}
+        </div>
 
-          {/* ── Search + Genre in one compact block ── */}
-          <div className="mb-2 space-y-1.5">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500 pointer-events-none" />
-              <input
-                type="text"
-                value={selectionSearchInput}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSelectionSearchInput(v);
-                  if (v.length > 1) { setSelectionMode("search"); setSelectionSearch(v); }
-                  else if (v.length === 0) { setSelectionMode("trending"); setSelectionSearch(""); }
-                }}
-                placeholder="Search movies & shows…"
-                className="w-full bg-zinc-900 border border-zinc-700/60 rounded-lg pl-8 pr-8 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-red-500/50 transition-colors"
-              />
-              {selectionSearchInput && (
-                <button onClick={() => { setSelectionSearchInput(""); setSelectionSearch(""); setSelectionMode("trending"); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
-              <button
-                onClick={() => { setSelectionMode("trending"); setSelectionSearchInput(""); setSelectionSearch(""); }}
-                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${selectionMode === "trending" ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400"}`}
-              >
-                🔥 Trending
+        {/* ── Search ── */}
+        <div className="flex-shrink-0 px-3 pb-1.5">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500 pointer-events-none" />
+            <input
+              type="text"
+              value={selectionSearchInput}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSelectionSearchInput(v);
+                if (v.length > 1) { changeSelectionMode("search", undefined, v); }
+                else if (v.length === 0) { changeSelectionMode("trending", undefined, ""); setSelectionSearchInput(""); }
+              }}
+              placeholder="Search movies & shows…"
+              className="w-full bg-zinc-900/80 border border-zinc-800 rounded-lg pl-8 pr-8 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-red-500/50 transition-colors"
+            />
+            {selectionSearchInput && (
+              <button onClick={() => { setSelectionSearchInput(""); changeSelectionMode("trending", undefined, ""); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                <X className="h-3.5 w-3.5" />
               </button>
-              {SELECTION_GENRES.map((g) => (
-                <button
-                  key={g}
-                  onClick={() => { setSelectionMode("genre"); setSelectionGenre(g); setSelectionSearchInput(""); setSelectionSearch(""); }}
-                  className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${selectionMode === "genre" && selectionGenre === g ? "bg-red-600 text-white" : "bg-zinc-800 text-gray-400"}`}
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ── Movie grid ── */}
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
-            {selectionItems.map((item) => (
-              <MoviePickCard
-                key={item.subjectId}
-                item={item}
-                selected={selectedMovies.some((m) => m.id === item.subjectId)}
-                onSelect={selectionConfirmed ? () => {} : handleMovieToggle}
-                onOpenEpisodePicker={selectionConfirmed ? () => {} : (it) => setEpisodePickerItem(it)}
-              />
-            ))}
-            {selectionItems.length === 0 && selectionMode === "search" && selectionSearch.length > 1 && (
-              <div className="col-span-full py-10 text-center">
-                <p className="text-gray-500 text-sm">No results for "{selectionSearch}"</p>
-              </div>
             )}
           </div>
+        </div>
 
-          {episodePickerItem && (
-            <WatchPartyEpisodePicker
-              item={episodePickerItem}
-              onConfirm={(movie) => { handleMovieToggle(movie); setEpisodePickerItem(null); }}
-              onClose={() => setEpisodePickerItem(null)}
-            />
-          )}
-
-          <div className="mt-4 flex justify-center">
-            <button onClick={handleLeave} className="text-gray-600 hover:text-red-400 text-xs transition-colors">
-              Leave Party
+        {/* ── Genre tabs — proper mobile horizontal scroll ── */}
+        <div className="flex-shrink-0 px-3 pb-2">
+          <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
+            <button
+              onClick={() => changeSelectionMode("trending")}
+              className={`flex-shrink-0 h-8 px-3.5 rounded-full text-xs font-bold transition-colors border ${
+                selectionMode === "trending"
+                  ? "bg-red-600 text-white border-red-600"
+                  : "bg-transparent text-gray-400 border-zinc-700 hover:border-zinc-500 hover:text-white"
+              }`}
+            >
+              🔥 Trending
             </button>
+            {SELECTION_GENRES.map((g) => (
+              <button
+                key={g}
+                onClick={() => { setSelectionSearchInput(""); changeSelectionMode("genre", g, ""); }}
+                className={`flex-shrink-0 h-8 px-3.5 rounded-full text-xs font-bold transition-colors border ${
+                  selectionMode === "genre" && selectionGenre === g
+                    ? "bg-red-600 text-white border-red-600"
+                    : "bg-transparent text-gray-400 border-zinc-700 hover:border-zinc-500 hover:text-white"
+                }`}
+              >
+                {g}
+              </button>
+            ))}
           </div>
         </div>
-      </Layout>
+
+        {/* ── Movie grid — scrollable within fixed zone, header+footer always pinned ── */}
+        <div className="flex-1 overflow-y-auto px-3 pb-1" style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
+          {selectionPageItems.length === 0 && selectionMode === "search" && selectionSearch.length > 1 ? (
+            <div className="h-full flex items-center justify-center py-16">
+              <p className="text-gray-500 text-sm">No results for "{selectionSearch}"</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+              {selectionPageItems.map((item) => (
+                <MoviePickCard
+                  key={item.subjectId}
+                  item={item}
+                  selected={selectedMovies.some((m) => m.id === item.subjectId)}
+                  onSelect={selectionConfirmed ? () => {} : handleMovieToggle}
+                  onOpenEpisodePicker={selectionConfirmed ? () => {} : (it) => setEpisodePickerItem(it)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Pagination bar ── */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-t border-zinc-800/60 bg-zinc-950">
+          <button
+            onClick={() => setSelectionPage((p) => Math.max(0, p - 1))}
+            disabled={selectionPage === 0}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-800 text-white text-sm font-bold disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 transition-all"
+          >
+            <ChevronLeft className="h-4 w-4" /> Prev
+          </button>
+          <span className="text-gray-500 text-xs font-medium">
+            {selectionPage + 1} / {totalSelectionPages}
+          </span>
+          <button
+            onClick={() => setSelectionPage((p) => Math.min(totalSelectionPages - 1, p + 1))}
+            disabled={selectionPage >= totalSelectionPages - 1}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-800 text-white text-sm font-bold disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 transition-all"
+          >
+            Next <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {episodePickerItem && (
+          <WatchPartyEpisodePicker
+            item={episodePickerItem}
+            onConfirm={(movie) => { handleMovieToggle(movie); setEpisodePickerItem(null); }}
+            onClose={() => setEpisodePickerItem(null)}
+          />
+        )}
+      </div>
     );
   }
 
