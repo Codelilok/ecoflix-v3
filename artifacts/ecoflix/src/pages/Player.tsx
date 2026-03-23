@@ -216,7 +216,17 @@ export default function Player() {
   }, [currentStream, id]);
 
   useEffect(() => {
-    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    const handleFsChange = () => {
+      const isFs = !!document.fullscreenElement;
+      setIsFullscreen(isFs);
+      try {
+        if (isFs) {
+          screen.orientation.lock("landscape").catch(() => {});
+        } else {
+          screen.orientation.lock("portrait").catch(() => {});
+        }
+      } catch {}
+    };
     document.addEventListener("fullscreenchange", handleFsChange);
     return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
