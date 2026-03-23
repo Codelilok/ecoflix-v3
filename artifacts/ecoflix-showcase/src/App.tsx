@@ -160,6 +160,10 @@ function HUD({ currentScene, total }: { currentScene: number; total: number }) {
 
 // ── BROWSER MOCKUP ────────────────────────────────────────────────────────────
 
+const IFRAME_W = 1280;
+const IFRAME_H = 720;
+const CHROME_H = 32;
+
 type BrowserProps = {
   path: string;
   accentColor: string;
@@ -169,64 +173,79 @@ type BrowserProps = {
 };
 
 function BrowserMockup({ path, accentColor, panFrom = {}, panTo = {}, highlight }: BrowserProps) {
-  // Scale the 1280×720 site to fit inside the mockup
-  const IFRAME_W = 1280;
-  const IFRAME_H = 720;
-  const MOCK_W = 680;
-  const MOCK_H = 420;
-  const CHROME_H = 36;
-  const scale = MOCK_W / IFRAME_W;
-  const contentH = MOCK_H - CHROME_H;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [mockW, setMockW] = useState(600);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([entry]) => {
+      setMockW(entry.contentRect.width);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const scale = mockW / IFRAME_W;
+  const mockH = Math.round(mockW * (IFRAME_H / IFRAME_W)) + CHROME_H;
+  const contentH = mockH - CHROME_H;
 
   return (
-    <motion.div
-      className="relative rounded-xl overflow-hidden flex-shrink-0"
-      style={{
-        width: MOCK_W,
-        height: MOCK_H,
-        boxShadow: highlight
-          ? `0 0 0 2px ${accentColor}, 0 0 60px ${accentColor}40, 0 30px 80px rgba(0,0,0,0.8)`
-          : `0 0 0 1px ${accentColor}40, 0 30px 80px rgba(0,0,0,0.8)`,
-      }}
-      initial={{ scale: 0.92, opacity: 0, y: 30 }}
-      animate={{ scale: 1, opacity: 1, y: 0 }}
-      transition={{ delay: 0.4, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-    >
-      {/* Chrome bar */}
-      <div className="flex items-center gap-2 px-3" style={{ height: CHROME_H, backgroundColor: "#111", borderBottom: "1px solid #222" }}>
-        <div className="flex gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-[#FF5F57]" />
-          <div className="w-3 h-3 rounded-full bg-[#FFBD2E]" />
-          <div className="w-3 h-3 rounded-full bg-[#28C840]" />
-        </div>
-        <div className="flex-1 mx-3 h-5 rounded text-[11px] flex items-center justify-center text-gray-500" style={{ backgroundColor: "#1a1a1a" }}>
-          ecoflix.app{path === "/" ? "" : path}
-        </div>
-      </div>
-
-      {/* Content window */}
-      <div style={{ width: MOCK_W, height: contentH, overflow: "hidden", backgroundColor: "#000" }}>
-        <motion.div
-          style={{ width: MOCK_W, height: contentH }}
-          animate={panTo}
-          initial={panFrom}
-          transition={{ delay: 1.5, duration: 3.5, ease: "easeInOut" }}
+    <div ref={containerRef} className="w-full">
+      <motion.div
+        className="relative rounded-lg overflow-hidden w-full"
+        style={{
+          height: mockH,
+          boxShadow: highlight
+            ? `0 0 0 2px ${accentColor}, 0 0 50px ${accentColor}40, 0 20px 60px rgba(0,0,0,0.9)`
+            : `0 0 0 1px ${accentColor}30, 0 20px 60px rgba(0,0,0,0.9)`,
+        }}
+        initial={{ scale: 0.93, opacity: 0, y: 24 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ delay: 0.35, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+      >
+        {/* Chrome bar */}
+        <div
+          className="flex items-center gap-2 px-3 flex-shrink-0"
+          style={{ height: CHROME_H, backgroundColor: "#111", borderBottom: "1px solid #1e1e1e" }}
         >
-          <iframe
-            src={SITE + path}
-            title={`ecoflix-${path}`}
-            style={{
-              width: IFRAME_W,
-              height: IFRAME_H,
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-              border: "none",
-              pointerEvents: "none",
-            }}
-          />
-        </motion.div>
-      </div>
-    </motion.div>
+          <div className="flex gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#FFBD2E]" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
+          </div>
+          <div
+            className="flex-1 mx-3 h-[18px] rounded text-[10px] flex items-center justify-center text-gray-600"
+            style={{ backgroundColor: "#181818" }}
+          >
+            ecoflix.app{path === "/" ? "" : path}
+          </div>
+        </div>
+
+        {/* Viewport */}
+        <div style={{ width: mockW, height: contentH, overflow: "hidden", backgroundColor: "#000" }}>
+          <motion.div
+            style={{ width: mockW, height: contentH }}
+            animate={panTo}
+            initial={panFrom}
+            transition={{ delay: 1.8, duration: 3.5, ease: "easeInOut" }}
+          >
+            <iframe
+              src={SITE + path}
+              title={`ecoflix-${path}`}
+              style={{
+                width: IFRAME_W,
+                height: IFRAME_H,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+                border: "none",
+                pointerEvents: "none",
+              }}
+            />
+          </motion.div>
+        </div>
+      </motion.div>
+    </div>
   );
 }
 
@@ -247,69 +266,79 @@ type SiteSceneProps = {
 function SiteScene({ path, icon, tag, title, description, accentColor, panFrom, panTo, highlight }: SiteSceneProps) {
   return (
     <motion.div
-      className="absolute inset-0 z-20 flex items-center gap-0"
+      className="absolute inset-0 z-20 flex flex-col md:flex-row items-stretch overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.6 }}
     >
-      {/* Left text panel */}
-      <div className="w-[38%] flex-shrink-0 h-full flex flex-col justify-center px-12 py-10" style={{ borderRight: `1px solid ${accentColor}15` }}>
-
+      {/* Text panel — top on mobile, left on desktop */}
+      <div
+        className="flex-shrink-0 flex flex-col justify-center px-6 py-5 md:px-10 md:py-10 md:w-[38%] md:h-full"
+        style={{ borderBottom: `1px solid ${accentColor}15` }}
+      >
         <motion.div
-          className="flex items-center gap-2 mb-5"
+          className="flex items-center gap-2 mb-3 md:mb-5"
           initial={{ x: -20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.35 }}
+          transition={{ delay: 0.3 }}
         >
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accentColor}20`, color: accentColor }}>
+          <div
+            className="w-8 h-8 md:w-9 md:h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+          >
             {icon}
           </div>
-          <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: accentColor }}>{tag}</span>
+          <span className="text-[10px] md:text-xs font-semibold tracking-widest uppercase" style={{ color: accentColor }}>
+            {tag}
+          </span>
         </motion.div>
 
         <motion.h2
-          className="text-5xl font-black leading-[1.08] mb-5"
-          initial={{ x: -30, opacity: 0 }}
+          className="text-3xl md:text-5xl font-black leading-tight md:leading-[1.08] mb-3 md:mb-5"
+          initial={{ x: -24, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ delay: 0.45, ease: [0.16, 1, 0.3, 1] }}
         >
           {title}
         </motion.h2>
 
         <motion.p
-          className="text-base text-white/50 leading-relaxed max-w-[280px]"
+          className="text-sm md:text-base text-white/50 leading-relaxed max-w-xs hidden md:block"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.75 }}
+          transition={{ delay: 0.7 }}
         >
           {description}
         </motion.p>
 
-        {/* Accent divider */}
         <motion.div
-          className="mt-8 h-px"
+          className="mt-4 md:mt-8 h-px"
           style={{ background: `linear-gradient(to right, ${accentColor}60, transparent)` }}
           initial={{ scaleX: 0, originX: 0 }}
           animate={{ scaleX: 1 }}
-          transition={{ delay: 0.9, duration: 0.8 }}
+          transition={{ delay: 0.85, duration: 0.8 }}
         />
 
-        {/* ECOFLIX label */}
         <motion.div
-          className="mt-6 text-xs tracking-[0.25em] uppercase font-bold"
-          style={{ color: accentColor, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.3em", fontSize: 18 }}
+          className="mt-3 md:mt-6 font-bold tracking-widest"
+          style={{ color: accentColor, fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(14px, 2vw, 20px)", letterSpacing: "0.25em" }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.1 }}
+          transition={{ delay: 1.0 }}
         >
           ECOFLIX 3.0
         </motion.div>
       </div>
 
-      {/* Right browser */}
-      <div className="flex-1 h-full flex items-center justify-center px-8 py-10">
-        <BrowserMockup path={path} accentColor={accentColor} panFrom={panFrom} panTo={panTo} highlight={highlight} />
+      {/* Browser panel — bottom on mobile, right on desktop */}
+      <div
+        className="flex-1 flex items-center justify-center p-3 md:p-6 lg:p-8 min-h-0"
+        style={{ borderLeft: `1px solid ${accentColor}10` }}
+      >
+        <div className="w-full max-w-full">
+          <BrowserMockup path={path} accentColor={accentColor} panFrom={panFrom} panTo={panTo} highlight={highlight} />
+        </div>
       </div>
     </motion.div>
   );

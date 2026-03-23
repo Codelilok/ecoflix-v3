@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock, Users } from "lucide-react";
+import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock, Users, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
@@ -103,6 +103,18 @@ export function Navbar() {
                 </Link>
               );
             })}
+
+            <div className="mt-3 pt-3 border-t border-zinc-800">
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest px-3 mb-1">Overview</p>
+              <a
+                href="/ecoflix-showcase/"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 text-base font-medium p-3 rounded-xl transition-colors text-gray-300 hover:bg-white/5 hover:text-white"
+              >
+                <Play className="h-5 w-5 flex-shrink-0 text-primary" />
+                Feature Showcase
+              </a>
+            </div>
           </div>
         </div>
       )}
