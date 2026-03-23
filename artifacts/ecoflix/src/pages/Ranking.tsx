@@ -7,23 +7,30 @@ import { getTitle, getPoster, getYear, getType, cn } from "@/lib/utils";
 import { Trophy, Film, Star, ArrowLeft, Tv, Clapperboard } from "lucide-react";
 import { MediaItem } from "@/lib/api-types";
 
-type CategoryId = "series" | "movies" | "nollywood" | "sa-drama" | "action" | "horror" | "romance";
+type CategoryId =
+  | "series" | "movies" | "nollywood" | "sa-drama"
+  | "action" | "horror" | "romance"
+  | "anime" | "k-drama" | "c-drama" | "thai-drama";
 
-const CATEGORIES: { id: CategoryId; label: string; icon: React.ReactNode }[] = [
-  { id: "series",    label: "Series",    icon: <Tv className="h-3.5 w-3.5" /> },
-  { id: "movies",    label: "Movies",    icon: <Clapperboard className="h-3.5 w-3.5" /> },
-  { id: "nollywood", label: "Nollywood", icon: null },
-  { id: "sa-drama",  label: "SA Drama",  icon: null },
-  { id: "action",    label: "Action",    icon: null },
-  { id: "horror",    label: "Horror",    icon: null },
-  { id: "romance",   label: "Romance",   icon: null },
+const CATEGORIES: { id: CategoryId; label: string; icon?: React.ReactNode }[] = [
+  { id: "series",     label: "Series",       icon: <Tv className="h-3.5 w-3.5" /> },
+  { id: "movies",     label: "Movies",       icon: <Clapperboard className="h-3.5 w-3.5" /> },
+  { id: "nollywood",  label: "Nollywood" },
+  { id: "sa-drama",   label: "SA Drama" },
+  { id: "action",     label: "Action" },
+  { id: "horror",     label: "Horror" },
+  { id: "romance",    label: "Romance" },
+  { id: "anime",      label: "Anime" },
+  { id: "k-drama",    label: "K-Drama" },
+  { id: "c-drama",    label: "C-Drama" },
+  { id: "thai-drama", label: "Thai Drama" },
 ];
 
-function getRankBadgeStyle(index: number) {
-  if (index === 0) return "bg-yellow-400 text-black";
-  if (index === 1) return "bg-slate-300 text-black";
-  if (index === 2) return "bg-amber-600 text-white";
-  return "bg-zinc-800 text-zinc-300 border border-zinc-700";
+function getRankStyle(index: number): { num: string; bar: string } {
+  if (index === 0) return { num: "text-yellow-400", bar: "bg-yellow-400" };
+  if (index === 1) return { num: "text-slate-300",  bar: "bg-slate-300" };
+  if (index === 2) return { num: "text-amber-500",  bar: "bg-amber-500" };
+  return { num: "text-zinc-500", bar: "bg-zinc-700" };
 }
 
 function RankingItem({ item, index }: { item: MediaItem; index: number }) {
@@ -32,49 +39,87 @@ function RankingItem({ item, index }: { item: MediaItem; index: number }) {
   const year = getYear(item);
   const itemType = getType(item);
   const rating = (item as any).imdbRatingValue;
+  const genres: string[] = (item as any).genre
+    ? String((item as any).genre).split(",").map((g: string) => g.trim()).filter(Boolean).slice(0, 2)
+    : [];
+
+  const { num, bar } = getRankStyle(index);
+  const isTop3 = index < 3;
 
   return (
     <Link href={`/${itemType}/${item.subjectId}`}>
-      <div className="group cursor-pointer">
-        {/* Poster card */}
-        <div className="relative rounded-xl overflow-hidden bg-zinc-900 aspect-[2/3] w-full shadow-lg">
+      <div className={cn(
+        "flex items-center gap-4 rounded-2xl border transition-all duration-200 cursor-pointer group overflow-hidden",
+        isTop3
+          ? "bg-gradient-to-r from-zinc-900 to-black border-zinc-700 hover:border-red-500/50 p-3"
+          : "bg-zinc-950 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-600 p-3"
+      )}>
+
+        {/* Rank number */}
+        <div className={cn(
+          "flex-shrink-0 font-black tabular-nums text-center leading-none w-8",
+          num,
+          isTop3 ? "text-3xl" : "text-xl"
+        )}>
+          {index + 1}
+        </div>
+
+        {/* Poster */}
+        <div className="flex-shrink-0 w-14 h-20 rounded-lg overflow-hidden bg-zinc-800 shadow-md">
           {poster ? (
             <img
               src={poster}
               alt={title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <Film className="h-10 w-10 text-zinc-700" />
+              <Film className="h-5 w-5 text-zinc-600" />
             </div>
           )}
-
-          {/* Rank badge */}
-          <div className={cn(
-            "absolute top-2 left-2 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black shadow-md",
-            getRankBadgeStyle(index)
-          )}>
-            {index + 1}
-          </div>
-
-          {/* Rating badge */}
-          {rating && (
-            <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-black/70 backdrop-blur-sm text-yellow-400 text-xs font-bold px-1.5 py-0.5 rounded-md">
-              <Star className="h-2.5 w-2.5 fill-current" /> {rating}
-            </div>
-          )}
-
-          {/* Bottom gradient + title overlay */}
-          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black via-black/60 to-transparent pt-8 pb-2 px-2">
-            <p className="text-white font-semibold text-xs leading-snug line-clamp-2 group-hover:text-red-400 transition-colors">
-              {title}
-            </p>
-            {year && (
-              <p className="text-zinc-400 text-[10px] mt-0.5">{year}</p>
-            )}
-          </div>
         </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <p className={cn(
+            "font-bold text-white truncate group-hover:text-red-400 transition-colors",
+            isTop3 ? "text-base" : "text-sm"
+          )}>
+            {title}
+          </p>
+
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {year && <span className="text-xs text-zinc-500">{year}</span>}
+            {rating && (
+              <span className="flex items-center gap-0.5 text-yellow-400 text-xs font-semibold">
+                <Star className="h-2.5 w-2.5 fill-current" /> {rating}
+              </span>
+            )}
+            <span className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded font-medium",
+              itemType === "tv"
+                ? "bg-blue-900/50 text-blue-400"
+                : "bg-red-900/50 text-red-400"
+            )}>
+              {itemType === "tv" ? "Series" : "Movie"}
+            </span>
+          </div>
+
+          {genres.length > 0 && (
+            <div className="flex gap-1 mt-1.5 flex-wrap">
+              {genres.map(g => (
+                <span key={g} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">
+                  {g}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Top-3 accent bar */}
+        {isTop3 && (
+          <div className={cn("w-1 self-stretch rounded-full flex-shrink-0", bar)} />
+        )}
       </div>
     </Link>
   );
@@ -83,12 +128,16 @@ function RankingItem({ item, index }: { item: MediaItem; index: number }) {
 function RankingContent({ categoryId }: { categoryId: CategoryId }) {
   const { data: movieRaw, isLoading: loadingMovies } = useRanking("movie");
   const { data: tvRaw,    isLoading: loadingTv }     = useRanking("tv");
-  const { data: trending                             } = useTrending();
+  const { data: trending }                            = useTrending();
   const { data: nollywoodData, isLoading: loadingNollywood } = useSearchCategory("Nollywood");
   const { data: saData,        isLoading: loadingSA }        = useSearchCategory("South African");
   const { data: actionData,    isLoading: loadingAction }    = useBrowseCategory("Action");
   const { data: horrorData,    isLoading: loadingHorror }    = useBrowseCategory("Horror");
   const { data: romanceData,   isLoading: loadingRomance }   = useSearchCategory("Romance");
+  const { data: animeData,     isLoading: loadingAnime }     = useBrowseCategory("Animation");
+  const { data: kdramaData,    isLoading: loadingKdrama }    = useSearchCategory("K-Drama");
+  const { data: cdramaData,    isLoading: loadingCdrama }    = useSearchCategory("C-Drama");
+  const { data: thaiData,      isLoading: loadingThai }      = useSearchCategory("Thai Drama");
 
   let isLoading = false;
   let items: MediaItem[] = [];
@@ -107,52 +156,32 @@ function RankingContent({ categoryId }: { categoryId: CategoryId }) {
       items = fromRanking.length > 0 ? fromRanking : (movieRaw || []);
       break;
     }
-    case "nollywood": {
-      isLoading = loadingNollywood;
-      items = nollywoodData || [];
-      break;
-    }
-    case "sa-drama": {
-      isLoading = loadingSA;
-      items = saData || [];
-      break;
-    }
-    case "action": {
-      isLoading = loadingAction;
-      items = actionData || [];
-      break;
-    }
-    case "horror": {
-      isLoading = loadingHorror;
-      items = horrorData || [];
-      break;
-    }
-    case "romance": {
-      isLoading = loadingRomance;
-      items = romanceData || [];
-      break;
-    }
+    case "nollywood":  isLoading = loadingNollywood; items = nollywoodData || []; break;
+    case "sa-drama":   isLoading = loadingSA;        items = saData        || []; break;
+    case "action":     isLoading = loadingAction;    items = actionData    || []; break;
+    case "horror":     isLoading = loadingHorror;    items = horrorData    || []; break;
+    case "romance":    isLoading = loadingRomance;   items = romanceData   || []; break;
+    case "anime":      isLoading = loadingAnime;     items = animeData     || []; break;
+    case "k-drama":    isLoading = loadingKdrama;    items = kdramaData    || []; break;
+    case "c-drama":    isLoading = loadingCdrama;    items = cdramaData    || []; break;
+    case "thai-drama": isLoading = loadingThai;      items = thaiData      || []; break;
   }
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-24">
-        <Spinner className="h-10 w-10" />
-      </div>
-    );
+    return <div className="flex justify-center py-24"><Spinner className="h-10 w-10" /></div>;
   }
 
   if (items.length === 0) {
     return (
       <div className="text-center py-24 text-gray-500">
         <Film className="h-12 w-12 mx-auto mb-3 text-zinc-700" />
-        <p>No content found right now. Check back soon.</p>
+        <p>No content found right now.</p>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+    <div className="flex flex-col gap-2">
       {items.map((item, index) => (
         <RankingItem key={`${item.subjectId}-${index}`} item={item} index={index} />
       ))}
@@ -193,7 +222,7 @@ export default function Ranking() {
                   key={cat.id}
                   onClick={() => setSelectedId(cat.id)}
                   className={cn(
-                    "flex items-center gap-2 text-left px-3 py-3 rounded-xl text-sm font-semibold transition-all",
+                    "flex items-center gap-2 text-left px-3 py-2.5 rounded-xl text-sm font-semibold transition-all",
                     selectedId === cat.id
                       ? "bg-red-600 text-white shadow-lg shadow-red-900/30"
                       : "text-zinc-500 hover:text-white hover:bg-zinc-800/70"
@@ -208,7 +237,7 @@ export default function Ranking() {
 
           {/* Right panel */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-5 border-b border-zinc-800 pb-4">
+            <div className="flex items-center gap-2 mb-4 border-b border-zinc-800 pb-4">
               <h2 className="text-xl font-bold text-white">{selected.label}</h2>
               <span className="text-xs text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-full border border-zinc-800">Top Ranked</span>
             </div>
