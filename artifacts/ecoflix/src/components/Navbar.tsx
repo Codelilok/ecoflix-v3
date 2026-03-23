@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock, Users, Play, Moon, Sun, Dice6 } from "lucide-react";
+import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock, Users, Dice6, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDarkMode } from "@/hooks/use-dark-mode";
+import { usePWAInstall } from "@/hooks/use-pwa-install";
 import { SurpriseMe } from "./SurpriseMe";
 
 export function Navbar() {
@@ -10,7 +10,7 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [surpriseOpen, setSurpriseOpen] = useState(false);
   const [location] = useLocation();
-  const { isDark, toggle } = useDarkMode();
+  const { canInstall, isInstalled, install } = usePWAInstall();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -79,13 +79,15 @@ export function Navbar() {
               <History className="h-5 w-5" />
             </Link>
 
-            <button
-              onClick={toggle}
-              className="text-muted-foreground hover:text-primary transition-colors"
-              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            >
-              {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </button>
+            {canInstall && !isInstalled && (
+              <button
+                onClick={install}
+                className="text-muted-foreground hover:text-primary transition-colors"
+                title="Install ECOFLIX App"
+              >
+                <Download className="h-5 w-5" />
+              </button>
+            )}
 
             <button
               className="text-muted-foreground hover:text-primary transition-colors"
@@ -130,17 +132,18 @@ export function Navbar() {
                 Surprise Me
               </button>
 
-              <div className="mt-3 pt-3 border-t border-border">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-3 mb-1">Overview</p>
-                <a
-                  href="/ecoflix-showcase/"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 text-base font-medium p-3 rounded-xl transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
+              {!isInstalled && (
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    install();
+                  }}
+                  className="flex items-center gap-3 text-base font-medium p-3 rounded-xl transition-colors text-muted-foreground hover:bg-accent hover:text-foreground w-full text-left"
                 >
-                  <Play className="h-5 w-5 flex-shrink-0 text-primary" />
-                  Feature Showcase
-                </a>
-              </div>
+                  <Download className="h-5 w-5 flex-shrink-0 text-primary" />
+                  Install App
+                </button>
+              )}
             </div>
           </div>
         )}

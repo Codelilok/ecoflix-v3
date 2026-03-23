@@ -1,0 +1,27 @@
+{
+  "name": "ECOFLIX",
+  "short_name": "ECOFLIX",
+  "description": "Stream movies and TV shows anywhere with ECOFLIX.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#e50914",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://ik.imagekit.io/o96hzoau7/CompressJPEG.Online_img_512x512__tXyS9wZEw.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://ik.imagekit.io/o96hzoau7/CompressJPEG.Online_img_512x512__tXyS9wZEw.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["entertainment", "video"],
+  "lang": "en"
+}
