@@ -19,11 +19,11 @@ const CATEGORIES: { id: CategoryId; label: string; icon: React.ReactNode }[] = [
   { id: "romance",   label: "Romance",   icon: null },
 ];
 
-function getMedalColor(index: number) {
-  if (index === 0) return "text-yellow-400";
-  if (index === 1) return "text-slate-300";
-  if (index === 2) return "text-amber-600";
-  return "text-zinc-600";
+function getRankBadgeStyle(index: number) {
+  if (index === 0) return "bg-yellow-400 text-black";
+  if (index === 1) return "bg-slate-300 text-black";
+  if (index === 2) return "bg-amber-600 text-white";
+  return "bg-zinc-800 text-zinc-300 border border-zinc-700";
 }
 
 function RankingItem({ item, index }: { item: MediaItem; index: number }) {
@@ -32,99 +32,49 @@ function RankingItem({ item, index }: { item: MediaItem; index: number }) {
   const year = getYear(item);
   const itemType = getType(item);
   const rating = (item as any).imdbRatingValue;
-  const genres = (item as any).genre
-    ? String((item as any).genre).split(",").map((g: string) => g.trim()).filter(Boolean).slice(0, 2)
-    : [];
-
-  const isTop3 = index < 3;
 
   return (
     <Link href={`/${itemType}/${item.subjectId}`}>
-      <div className={cn(
-        "flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200 cursor-pointer group",
-        isTop3
-          ? "bg-gradient-to-r from-zinc-900 via-zinc-900 to-black border-zinc-700 hover:border-red-500/40"
-          : "bg-zinc-950 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-600"
-      )}>
-
-        {/* Rank number */}
-        <div className={cn(
-          "flex-shrink-0 font-black tabular-nums text-right leading-none",
-          getMedalColor(index),
-          index === 0 ? "text-5xl w-12" :
-          index === 1 ? "text-4xl w-12" :
-          index === 2 ? "text-4xl w-12" :
-          "text-2xl w-10 opacity-70"
-        )}>
-          {index + 1}
-        </div>
-
-        {/* Poster */}
-        <div className={cn(
-          "flex-shrink-0 rounded-xl overflow-hidden bg-zinc-800 shadow-lg",
-          isTop3 ? "w-16 md:w-20" : "w-14 md:w-16"
-        )} style={{ aspectRatio: "2/3" }}>
+      <div className="group cursor-pointer">
+        {/* Poster card */}
+        <div className="relative rounded-xl overflow-hidden bg-zinc-900 aspect-[2/3] w-full shadow-lg">
           {poster ? (
             <img
               src={poster}
               alt={title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <Film className="h-6 w-6 text-zinc-600" />
+              <Film className="h-10 w-10 text-zinc-700" />
             </div>
           )}
-        </div>
 
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <h3 className={cn(
-            "font-bold text-white truncate group-hover:text-red-400 transition-colors leading-snug",
-            isTop3 ? "text-base md:text-lg" : "text-sm md:text-base"
+          {/* Rank badge */}
+          <div className={cn(
+            "absolute top-2 left-2 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black shadow-md",
+            getRankBadgeStyle(index)
           )}>
-            {title}
-          </h3>
-
-          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1.5">
-            {year && (
-              <span className="text-xs text-zinc-500">{year}</span>
-            )}
-            {rating && (
-              <span className="flex items-center gap-0.5 text-yellow-400 font-semibold text-xs">
-                <Star className="h-3 w-3 fill-current" /> {rating}
-              </span>
-            )}
+            {index + 1}
           </div>
 
-          {genres.length > 0 && (
-            <div className="flex gap-1.5 mt-2 flex-wrap">
-              {genres.map(g => (
-                <span key={g} className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400">
-                  {g}
-                </span>
-              ))}
-              <span className={cn(
-                "text-[10px] px-2 py-0.5 rounded-full font-medium",
-                itemType === "tv"
-                  ? "bg-blue-950/60 border border-blue-800/50 text-blue-400"
-                  : "bg-red-950/60 border border-red-800/50 text-red-400"
-              )}>
-                {itemType === "tv" ? "Series" : "Movie"}
-              </span>
+          {/* Rating badge */}
+          {rating && (
+            <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-black/70 backdrop-blur-sm text-yellow-400 text-xs font-bold px-1.5 py-0.5 rounded-md">
+              <Star className="h-2.5 w-2.5 fill-current" /> {rating}
             </div>
           )}
-        </div>
 
-        {/* Top 3 glow accent */}
-        {isTop3 && (
-          <div className={cn(
-            "flex-shrink-0 w-1 self-stretch rounded-full",
-            index === 0 ? "bg-yellow-400" :
-            index === 1 ? "bg-slate-300" :
-            "bg-amber-600"
-          )} />
-        )}
+          {/* Bottom gradient + title overlay */}
+          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black via-black/60 to-transparent pt-8 pb-2 px-2">
+            <p className="text-white font-semibold text-xs leading-snug line-clamp-2 group-hover:text-red-400 transition-colors">
+              {title}
+            </p>
+            {year && (
+              <p className="text-zinc-400 text-[10px] mt-0.5">{year}</p>
+            )}
+          </div>
+        </div>
       </div>
     </Link>
   );
@@ -202,7 +152,7 @@ function RankingContent({ categoryId }: { categoryId: CategoryId }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
       {items.map((item, index) => (
         <RankingItem key={`${item.subjectId}-${index}`} item={item} index={index} />
       ))}
