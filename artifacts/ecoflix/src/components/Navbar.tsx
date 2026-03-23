@@ -1,16 +1,78 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock, Users, Dice6, Download } from "lucide-react";
+import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock, Users, Dice6, Download, Share, ArrowUpFromLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePWAInstall } from "@/hooks/use-pwa-install";
 import { SurpriseMe } from "./SurpriseMe";
+
+function IOSInstallGuide({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-md bg-zinc-900 rounded-t-3xl shadow-2xl border-t border-zinc-700 p-6 pb-10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-10 h-1 bg-zinc-600 rounded-full mx-auto mb-6" />
+
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 rounded-xl bg-red-600/20 flex items-center justify-center flex-shrink-0">
+            <Download className="h-5 w-5 text-red-500" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-white">Install ECOFLIX</h2>
+            <p className="text-xs text-zinc-400">Add to your Home Screen</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 text-sm font-bold text-white">1</div>
+            <div className="flex-1">
+              <p className="text-sm text-zinc-200 font-medium">Tap the Share button</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Find the <span className="text-zinc-300 font-medium">Share</span> icon at the bottom of Safari</p>
+              <div className="mt-2 inline-flex items-center gap-1.5 bg-zinc-800 px-3 py-1.5 rounded-lg">
+                <ArrowUpFromLine className="h-4 w-4 text-blue-400" />
+                <span className="text-xs text-zinc-300 font-medium">Share</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-4">
+            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 text-sm font-bold text-white">2</div>
+            <div className="flex-1">
+              <p className="text-sm text-zinc-200 font-medium">Tap "Add to Home Screen"</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Scroll down in the share sheet to find this option</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-4">
+            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 text-sm font-bold text-white">3</div>
+            <div className="flex-1">
+              <p className="text-sm text-zinc-200 font-medium">Tap "Add"</p>
+              <p className="text-xs text-zinc-500 mt-0.5">ECOFLIX will appear on your Home Screen like a native app</p>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="mt-6 w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-semibold text-sm transition-colors"
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [surpriseOpen, setSurpriseOpen] = useState(false);
+  const [iosGuideOpen, setIosGuideOpen] = useState(false);
   const [location] = useLocation();
-  const { canInstall, isInstalled, install } = usePWAInstall();
+  const { canInstall, isInstalled, install, isIOS } = usePWAInstall();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -34,6 +96,20 @@ export function Navbar() {
     { name: "Watch History", path: "/history", icon: Clock },
     { name: "Watch Party", path: "/watch-party", icon: Users },
   ];
+
+  const handleInstall = async () => {
+    setMobileMenuOpen(false);
+    if (isIOS) {
+      setIosGuideOpen(true);
+      return;
+    }
+    const result = await install();
+    if (result === "unavailable") {
+      setIosGuideOpen(true);
+    }
+  };
+
+  const showInstallOption = !isInstalled;
 
   return (
     <>
@@ -79,9 +155,9 @@ export function Navbar() {
               <History className="h-5 w-5" />
             </Link>
 
-            {canInstall && !isInstalled && (
+            {(canInstall || isIOS) && showInstallOption && (
               <button
-                onClick={install}
+                onClick={handleInstall}
                 className="text-muted-foreground hover:text-primary transition-colors"
                 title="Install ECOFLIX App"
               >
@@ -128,19 +204,16 @@ export function Navbar() {
                 }}
                 className="flex items-center gap-3 text-base font-medium p-3 rounded-xl transition-colors text-muted-foreground hover:bg-accent hover:text-foreground w-full text-left"
               >
-                <Dice6 className="h-5 w-5 flex-shrink-0 text-primary" />
+                <Dice6 className="h-5 w-5 flex-shrink-0" />
                 Surprise Me
               </button>
 
-              {!isInstalled && (
+              {showInstallOption && (
                 <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    install();
-                  }}
+                  onClick={handleInstall}
                   className="flex items-center gap-3 text-base font-medium p-3 rounded-xl transition-colors text-muted-foreground hover:bg-accent hover:text-foreground w-full text-left"
                 >
-                  <Download className="h-5 w-5 flex-shrink-0 text-primary" />
+                  <Download className="h-5 w-5 flex-shrink-0" />
                   Install App
                 </button>
               )}
@@ -150,6 +223,7 @@ export function Navbar() {
       </header>
 
       {surpriseOpen && <SurpriseMe onClose={() => setSurpriseOpen(false)} />}
+      {iosGuideOpen && <IOSInstallGuide onClose={() => setIosGuideOpen(false)} />}
     </>
   );
 }

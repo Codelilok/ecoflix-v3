@@ -6,7 +6,7 @@
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#e50914",
-  "orientation": "any",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "https://ik.imagekit.io/o96hzoau7/CompressJPEG.Online_img_512x512__tXyS9wZEw.jpg",
