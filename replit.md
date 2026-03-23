@@ -78,6 +78,16 @@ ECOFLIX is a fully functional Netflix-style streaming website at `/` (preview pa
 - `ecoflix_wishlist` — Array of saved WishlistItems
 - `ecoflix_continue` — Array of ContinueWatchingItems with progress %
 
+## ECOFLIX Feature Showcase — Animated Video
+
+A ~60-second cinematic motion graphics video showcasing ECOFLIX's key features.
+
+- **Artifact**: `artifacts/ecoflix-showcase` (`@workspace/ecoflix-showcase`)
+- **Preview path**: `/ecoflix-showcase/`
+- **Port**: 3003
+- **Stack**: React + Vite + Framer Motion + Tailwind CSS + Bebas Neue/Inter fonts
+- **Scenes**: Intro → Watch Party (hero) → Rankings → Content Discovery → Continue Watching → Quality/Subtitles → Outro
+
 ## Packages (api-server)
 
 ### `artifacts/api-server` (`@workspace/api-server`)
