@@ -60,7 +60,7 @@ function RankingItem({ item, index }: { item: MediaItem; index: number }) {
             </div>
           )}
           {/* Rank number on poster */}
-          <div className="absolute inset-0 flex items-end justify-start p-1.5">
+          <div className="absolute inset-0 flex items-start justify-start p-1.5">
             <span className={cn(
               "font-black leading-none select-none",
               rankText,
