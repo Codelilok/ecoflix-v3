@@ -5,7 +5,7 @@ import { useWishlist, WishlistItem } from "@/hooks/use-local-state";
 import { useToast } from "@/hooks/use-toast";
 import {
   Heart, Trash2, Play, Search, X, Check, Share2,
-  LayoutGrid, List, CheckCircle2,
+  LayoutGrid, List, CheckCircle2, ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "usehooks-ts";
@@ -78,6 +78,12 @@ export default function Wishlist() {
     return (
       <Layout>
         <div className="pt-24 px-6 md:px-14 max-w-screen-2xl mx-auto w-full min-h-[80vh] flex flex-col items-center justify-center text-center space-y-5 py-24">
+          <button
+            onClick={() => window.history.back()}
+            className="absolute top-20 left-4 md:left-12 flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
           <div className="w-20 h-20 rounded-full bg-zinc-900 border-2 border-dashed border-zinc-700 flex items-center justify-center">
             <Heart className="h-9 w-9 text-zinc-600" />
           </div>
@@ -106,11 +112,20 @@ export default function Wishlist() {
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3 border-b border-zinc-800 pb-5">
-          <h1 className="text-3xl md:text-4xl font-black text-white flex items-center gap-3">
-            <Heart className="h-7 w-7 text-red-500 fill-current" />
-            My List
-            <span className="text-lg font-normal text-zinc-500">{wishlist.length}</span>
-          </h1>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.history.back()}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white transition-all"
+              title="Go back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <h1 className="text-3xl md:text-4xl font-black text-white flex items-center gap-3">
+              <Heart className="h-7 w-7 text-red-500 fill-current" />
+              My List
+              <span className="text-lg font-normal text-zinc-500">{wishlist.length}</span>
+            </h1>
+          </div>
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Grid / List toggle */}
