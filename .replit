@@ -15,28 +15,6 @@ args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
 
 [workflows]
-runButton = "Project"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "artifacts/ecoflix-showcase: ECOFLIX Feature Showcase"
-
-[[workflows.workflow]]
-name = "artifacts/ecoflix-showcase: ECOFLIX Feature Showcase"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "webview"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/ecoflix-showcase run dev"
-waitForPort = 3003
 
 [agent]
 stack = "PNPM_WORKSPACE"
