@@ -36,26 +36,14 @@ function getQualityLabel(stream: Stream, index: number): string {
 }
 
 function triggerDownload(url: string, filename: string) {
-  fetch(url)
-    .then((res) => res.blob())
-    .then((blob) => {
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-    })
-    .catch(() => {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    });
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 export function QualityModal({
@@ -92,9 +80,8 @@ export function QualityModal({
       onClose();
       return;
     }
-    const url = stream.downloadUrl || stream.proxyUrl || stream.url;
-    if (url) triggerDownload(url, `${safeFilename}.mp4`);
-    onClose();
+    setSelectedStream(stream);
+    setDownloadStep("type");
   };
 
   const handleVideoOnly = () => {

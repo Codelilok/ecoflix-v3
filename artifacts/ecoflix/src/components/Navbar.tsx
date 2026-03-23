@@ -30,7 +30,7 @@ function IOSInstallGuide({ onClose }: { onClose: () => void }) {
             <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 text-sm font-bold text-white">1</div>
             <div className="flex-1">
               <p className="text-sm text-zinc-200 font-medium">Tap the Share button</p>
-              <p className="text-xs text-zinc-500 mt-0.5">Find the <span className="text-zinc-300 font-medium">Share</span> icon at the bottom of Safari</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Find the <span className="text-zinc-300 font-medium">Share</span> icon at the bottom of your browser</p>
               <div className="mt-2 inline-flex items-center gap-1.5 bg-zinc-800 px-3 py-1.5 rounded-lg">
                 <ArrowUpFromLine className="h-4 w-4 text-blue-400" />
                 <span className="text-xs text-zinc-300 font-medium">Share</span>
