@@ -26,11 +26,11 @@ const CATEGORIES: { id: CategoryId; label: string; icon?: React.ReactNode }[] = 
   { id: "thai-drama", label: "Thai Drama" },
 ];
 
-function getRankStyle(index: number): { num: string; bar: string } {
-  if (index === 0) return { num: "text-yellow-400", bar: "bg-yellow-400" };
-  if (index === 1) return { num: "text-slate-300",  bar: "bg-slate-300" };
-  if (index === 2) return { num: "text-amber-500",  bar: "bg-amber-500" };
-  return { num: "text-zinc-500", bar: "bg-zinc-700" };
+function getRankLabel(index: number) {
+  if (index === 0) return { text: "text-yellow-400", shadow: "drop-shadow-[0_1px_4px_rgba(250,204,21,0.6)]" };
+  if (index === 1) return { text: "text-slate-300",  shadow: "drop-shadow-[0_1px_4px_rgba(203,213,225,0.5)]" };
+  if (index === 2) return { text: "text-amber-500",  shadow: "drop-shadow-[0_1px_4px_rgba(245,158,11,0.5)]" };
+  return { text: "text-white", shadow: "drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]" };
 }
 
 function RankingItem({ item, index }: { item: MediaItem; index: number }) {
@@ -39,33 +39,15 @@ function RankingItem({ item, index }: { item: MediaItem; index: number }) {
   const year = getYear(item);
   const itemType = getType(item);
   const rating = (item as any).imdbRatingValue;
-  const genres: string[] = (item as any).genre
-    ? String((item as any).genre).split(",").map((g: string) => g.trim()).filter(Boolean).slice(0, 2)
-    : [];
-
-  const { num, bar } = getRankStyle(index);
   const isTop3 = index < 3;
+  const { text: rankText, shadow: rankShadow } = getRankLabel(index);
 
   return (
     <Link href={`/${itemType}/${item.subjectId}`}>
-      <div className={cn(
-        "flex items-center gap-4 rounded-2xl border transition-all duration-200 cursor-pointer group overflow-hidden",
-        isTop3
-          ? "bg-gradient-to-r from-zinc-900 to-black border-zinc-700 hover:border-red-500/50 p-3"
-          : "bg-zinc-950 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-600 p-3"
-      )}>
+      <div className="flex items-center gap-4 px-3 py-2.5 rounded-2xl border border-zinc-800/80 bg-zinc-950 hover:bg-zinc-900 hover:border-zinc-700 transition-all duration-200 cursor-pointer group">
 
-        {/* Rank number */}
-        <div className={cn(
-          "flex-shrink-0 font-black tabular-nums text-center leading-none w-8",
-          num,
-          isTop3 ? "text-3xl" : "text-xl"
-        )}>
-          {index + 1}
-        </div>
-
-        {/* Poster */}
-        <div className="flex-shrink-0 w-14 h-20 rounded-lg overflow-hidden bg-zinc-800 shadow-md">
+        {/* Poster with rank overlaid */}
+        <div className="relative flex-shrink-0 w-16 h-24 rounded-xl overflow-hidden bg-zinc-800 shadow-lg">
           {poster ? (
             <img
               src={poster}
@@ -74,21 +56,34 @@ function RankingItem({ item, index }: { item: MediaItem; index: number }) {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <Film className="h-5 w-5 text-zinc-600" />
+              <Film className="h-6 w-6 text-zinc-600" />
             </div>
           )}
+          {/* Rank number on poster */}
+          <div className="absolute inset-0 flex items-end justify-start p-1.5">
+            <span className={cn(
+              "font-black leading-none select-none",
+              rankText,
+              rankShadow,
+              isTop3 ? "text-4xl" : "text-3xl"
+            )}
+              style={{ WebkitTextStroke: isTop3 ? "0.5px rgba(0,0,0,0.4)" : "0.5px rgba(0,0,0,0.6)" }}
+            >
+              {index + 1}
+            </span>
+          </div>
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           <p className={cn(
-            "font-bold text-white truncate group-hover:text-red-400 transition-colors",
+            "font-semibold text-white leading-snug group-hover:text-red-400 transition-colors",
             isTop3 ? "text-base" : "text-sm"
           )}>
             {title}
           </p>
 
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             {year && <span className="text-xs text-zinc-500">{year}</span>}
             {rating && (
               <span className="flex items-center gap-0.5 text-yellow-400 text-xs font-semibold">
@@ -96,30 +91,15 @@ function RankingItem({ item, index }: { item: MediaItem; index: number }) {
               </span>
             )}
             <span className={cn(
-              "text-[10px] px-1.5 py-0.5 rounded font-medium",
+              "text-[10px] px-2 py-0.5 rounded-full font-medium tracking-wide",
               itemType === "tv"
-                ? "bg-blue-900/50 text-blue-400"
-                : "bg-red-900/50 text-red-400"
+                ? "bg-blue-900/40 text-blue-400 border border-blue-800/40"
+                : "bg-red-900/40 text-red-400 border border-red-800/40"
             )}>
               {itemType === "tv" ? "Series" : "Movie"}
             </span>
           </div>
-
-          {genres.length > 0 && (
-            <div className="flex gap-1 mt-1.5 flex-wrap">
-              {genres.map(g => (
-                <span key={g} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">
-                  {g}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
-
-        {/* Top-3 accent bar */}
-        {isTop3 && (
-          <div className={cn("w-1 self-stretch rounded-full flex-shrink-0", bar)} />
-        )}
       </div>
     </Link>
   );
