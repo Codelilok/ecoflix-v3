@@ -80,9 +80,10 @@ export default function Wishlist() {
         <div className="pt-24 px-6 md:px-14 max-w-screen-2xl mx-auto w-full min-h-[80vh] flex flex-col items-center justify-center text-center space-y-5 py-24">
           <button
             onClick={() => window.history.back()}
-            className="absolute top-20 left-4 md:left-12 flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
+            className="absolute top-20 left-4 md:left-12 flex items-center justify-center w-9 h-9 rounded-full bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white transition-all"
+            title="Go back"
           >
-            <ArrowLeft className="h-4 w-4" /> Back
+            <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="w-20 h-20 rounded-full bg-zinc-900 border-2 border-dashed border-zinc-700 flex items-center justify-center">
             <Heart className="h-9 w-9 text-zinc-600" />

@@ -6,6 +6,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useBrowse, useSearchCategory } from "@/hooks/use-ecoflix";
 import { MediaItem } from "@/lib/api-types";
 import { cn } from "@/lib/utils";
+import { ArrowLeft } from "lucide-react";
 
 const GENRES = ["Action", "Drama", "Comedy", "Thriller", "Sci-Fi", "Horror", "Romance", "Documentary", "Animation", "Crime", "Adventure", "K-Drama", "C-Drama", "Nollywood"];
 
@@ -130,9 +131,18 @@ export default function Browse() {
     <Layout>
       <div className="pt-24 px-6 md:px-14 max-w-screen-2xl mx-auto w-full min-h-screen pb-16">
         <div className="flex flex-col gap-5 mb-8">
-          <h1 className="text-3xl md:text-4xl font-black text-white">
-            {mode === 'category' && selectedCategory ? selectedCategory : 'Browse'}
-          </h1>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.history.back()}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white transition-all flex-shrink-0"
+              title="Go back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <h1 className="text-3xl md:text-4xl font-black text-white">
+              {mode === 'category' && selectedCategory ? selectedCategory : 'Browse'}
+            </h1>
+          </div>
 
           <div className="flex flex-wrap gap-2">
             {GENRES.map(genre => (
