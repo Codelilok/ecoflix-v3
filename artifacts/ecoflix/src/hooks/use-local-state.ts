@@ -48,7 +48,20 @@ export function useWishlist() {
     return wishlist.some(i => String(i.id) === String(id));
   };
 
-  return { wishlist, toggleWishlist, clearWishlist, isInWishlist };
+  const addManyToWishlist = (items: Omit<WishlistItem, 'addedAt'>[]): number => {
+    let added = 0;
+    setWishlist(prev => {
+      const existingIds = new Set(prev.map(i => String(i.id)));
+      const newItems = items
+        .filter(i => !existingIds.has(String(i.id)))
+        .map(i => ({ ...i, addedAt: Date.now() }));
+      added = newItems.length;
+      return [...prev, ...newItems];
+    });
+    return added;
+  };
+
+  return { wishlist, toggleWishlist, clearWishlist, isInWishlist, addManyToWishlist };
 }
 
 export function useContinueWatching() {

@@ -14,6 +14,7 @@ import Wishlist from "./pages/Wishlist";
 import Category from "./pages/Category";
 import WatchHistory from "./pages/WatchHistory";
 import WatchParty from "./pages/WatchParty";
+import SharedWishlist from "./pages/SharedWishlist";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/category/:slug" component={Category} />
       <Route path="/ranking" component={Ranking} />
       <Route path="/wishlist" component={Wishlist} />
+      <Route path="/wishlist/shared" component={SharedWishlist} />
       <Route path="/history" component={WatchHistory} />
       <Route path="/watch-party" component={WatchParty} />
       <Route path="/movie/:id" component={MovieDetail} />
