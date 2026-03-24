@@ -1,5 +1,6 @@
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import { Pool } from "pg";
 import app from "./app";
 import { logger } from "./lib/logger";
 
@@ -14,6 +15,8 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+const pool = new Pool({ connectionString: process.env["DATABASE_URL"] });
 
 interface PartyMember {
   id: string;
@@ -51,6 +54,55 @@ interface PartyState {
 
 const parties = new Map<string, PartyState>();
 let clientIdCounter = 0;
+
+async function savePartyToDB(party: PartyState): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO parties (code, phase, movies, current_movie_idx, playback_state)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (code) DO UPDATE
+       SET phase = EXCLUDED.phase,
+           movies = EXCLUDED.movies,
+           current_movie_idx = EXCLUDED.current_movie_idx,
+           playback_state = EXCLUDED.playback_state`,
+      [
+        party.code,
+        party.phase,
+        JSON.stringify(party.movies),
+        party.currentMovieIdx,
+        party.playbackState ? JSON.stringify(party.playbackState) : null,
+      ]
+    );
+  } catch (e) {
+    logger.error(e, "Failed to save party to DB");
+  }
+}
+
+async function deletePartyFromDB(code: string): Promise<void> {
+  try {
+    await pool.query("DELETE FROM parties WHERE code = $1", [code]);
+  } catch (e) {
+    logger.error(e, "Failed to delete party from DB");
+  }
+}
+
+async function loadPartyFromDB(code: string): Promise<Omit<PartyState, "members"> | null> {
+  try {
+    const result = await pool.query("SELECT * FROM parties WHERE code = $1", [code]);
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      code: row.code,
+      phase: row.phase,
+      movies: row.movies || [],
+      currentMovieIdx: row.current_movie_idx,
+      playbackState: row.playback_state || null,
+    };
+  } catch (e) {
+    logger.error(e, "Failed to load party from DB");
+    return null;
+  }
+}
 
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -106,7 +158,7 @@ wss.on("connection", (ws) => {
     }
   };
 
-  ws.on("message", (raw) => {
+  ws.on("message", async (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
 
@@ -123,25 +175,37 @@ wss.on("connection", (ws) => {
         };
         parties.set(code, party);
         currentPartyCode = code;
+        await savePartyToDB(party);
         send({ type: "joined", partyCode: code, clientId, isHost: true });
         sendPartyState(party);
       } else if (msg.type === "join_party") {
-        const party = parties.get(msg.code);
+        let party = parties.get(msg.code);
+
         if (!party) {
-          send({ type: "error", message: "Party not found. Check the code and try again." });
-          return;
+          const dbParty = await loadPartyFromDB(msg.code);
+          if (!dbParty) {
+            send({ type: "error", message: "Party not found. Check the code and try again." });
+            return;
+          }
+          party = { ...dbParty, members: [] };
+          parties.set(msg.code, party);
         }
+
         if (party.members.length >= 2) {
           send({ type: "error", message: "This party is already full." });
           return;
         }
+        const isHost = party.members.length === 0;
         party.members.push({ id: clientId, name: msg.name, ws });
         currentPartyCode = msg.code;
-        send({ type: "joined", partyCode: msg.code, clientId, isHost: false });
+        send({ type: "joined", partyCode: msg.code, clientId, isHost });
         sendPartyState(party);
         if (party.members.length === 2) {
-          party.phase = "selecting";
-          broadcastToAll(party, { type: "phase_change", phase: "selecting" });
+          if (party.phase === "lobby") {
+            party.phase = "selecting";
+            await savePartyToDB(party);
+            broadcastToAll(party, { type: "phase_change", phase: "selecting" });
+          }
           sendPartyState(party);
         }
       } else if (msg.type === "select_movies" && currentPartyCode) {
@@ -154,6 +218,7 @@ wss.on("connection", (ws) => {
         const allSelected = party.members.length === 2 && party.members.every((m) => m.movieSelection && m.movieSelection.length > 0);
         if (allSelected) {
           party.phase = "flipping";
+          await savePartyToDB(party);
           broadcastToAll(party, {
             type: "ready_to_flip",
             group1: party.members[0].movieSelection!,
@@ -169,6 +234,7 @@ wss.on("connection", (ws) => {
         party.movies = msg.movies;
         party.phase = "watching";
         party.playbackState = { playing: false, time: 0, updatedAt: Date.now() };
+        await savePartyToDB(party);
         broadcastToAll(party, { type: "flip_result", movies: party.movies });
         sendPartyState(party);
       } else if (msg.type === "swap_movies" && currentPartyCode) {
@@ -177,6 +243,7 @@ wss.on("connection", (ws) => {
         const isHost = party.members[0]?.id === clientId;
         if (!isHost) return;
         party.movies = [party.movies[1], party.movies[0]];
+        await savePartyToDB(party);
         broadcastToAll(party, { type: "flip_result", movies: party.movies });
       } else if (msg.type === "playback" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
@@ -206,6 +273,7 @@ wss.on("connection", (ws) => {
         if (party.currentMovieIdx < party.movies.length - 1) {
           party.currentMovieIdx++;
           party.playbackState = { playing: false, time: 0, updatedAt: Date.now() };
+          await savePartyToDB(party);
           broadcastToAll(party, {
             type: "next_movie",
             movieIdx: party.currentMovieIdx,
@@ -214,6 +282,7 @@ wss.on("connection", (ws) => {
           sendPartyState(party);
         } else {
           party.phase = "done";
+          await savePartyToDB(party);
           sendPartyState(party);
         }
       } else if (msg.type === "stream_url" && currentPartyCode) {
@@ -238,6 +307,7 @@ wss.on("connection", (ws) => {
         movie.season = String(msg.season);
         movie.episode = String(msg.episode);
         party.playbackState = { playing: false, time: 0, updatedAt: Date.now() };
+        await savePartyToDB(party);
         broadcastToAll(party, {
           type: "episode_changed",
           season: msg.season,
@@ -251,11 +321,13 @@ wss.on("connection", (ws) => {
         if (!party.playbackState) {
           party.playbackState = { playing: false, time: 0, updatedAt: Date.now() };
         }
+        await savePartyToDB(party);
         sendPartyState(party);
       } else if (msg.type === "end_party" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         party.phase = "done";
+        await savePartyToDB(party);
         sendPartyState(party);
       } else if (msg.type === "leave_party" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
@@ -263,10 +335,12 @@ wss.on("connection", (ws) => {
           party.members = party.members.filter((m) => m.id !== clientId);
           if (party.members.length === 0) {
             parties.delete(currentPartyCode);
+            await deletePartyFromDB(currentPartyCode);
           } else {
             broadcastToAll(party, { type: "member_left" });
             if (party.phase === "selecting" || party.phase === "flipping") {
               party.phase = "lobby";
+              await savePartyToDB(party);
             }
             sendPartyState(party);
           }
@@ -278,7 +352,7 @@ wss.on("connection", (ws) => {
     }
   });
 
-  ws.on("close", () => {
+  ws.on("close", async () => {
     if (!currentPartyCode) return;
     const party = parties.get(currentPartyCode);
     if (!party) return;
@@ -289,6 +363,7 @@ wss.on("connection", (ws) => {
       broadcastToAll(party, { type: "member_left" });
       if (party.phase === "selecting" || party.phase === "flipping") {
         party.phase = "lobby";
+        await savePartyToDB(party);
       }
       sendPartyState(party);
     }
