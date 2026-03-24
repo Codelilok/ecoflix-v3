@@ -12,6 +12,25 @@ if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${raw
 
 const pool = new Pool({ connectionString: process.env["DATABASE_URL"] });
 
+async function ensureSchema(): Promise<void> {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS parties (
+        code VARCHAR(6) PRIMARY KEY,
+        host_token VARCHAR(36),
+        phase VARCHAR(20) NOT NULL DEFAULT 'lobby',
+        movies JSONB NOT NULL DEFAULT '[]',
+        current_movie_idx INTEGER NOT NULL DEFAULT 0,
+        playback_state JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`ALTER TABLE parties ADD COLUMN IF NOT EXISTS host_token VARCHAR(36)`);
+  } catch (e) {
+    logger.error(e, "Failed to ensure DB schema");
+  }
+}
+
 interface PartyMember {
   id: string;
   name: string;
@@ -191,31 +210,25 @@ wss.on("connection", (ws) => {
         }
 
         const providedToken = msg.hostToken || "";
-        const isHost = party.members.length === 0
-          ? (providedToken === party.hostToken)
-          : false;
+        const isHost = providedToken.length > 0 && providedToken === party.hostToken;
 
-        if (party.members.length === 0 && !isHost) {
-          party.members.push({ id: clientId, name: msg.name, ws });
-          currentPartyCode = msg.code;
-          send({ type: "joined", partyCode: msg.code, clientId, isHost: false });
-          sendPartyState(party);
+        const newMember = { id: clientId, name: msg.name, ws };
+        if (isHost) {
+          party.members = [newMember, ...party.members];
         } else {
-          party.members.push({ id: clientId, name: msg.name, ws });
-          if (isHost) {
-            party.members = [party.members[party.members.length - 1], ...party.members.slice(0, -1)];
+          party.members = [...party.members, newMember];
+        }
+        currentPartyCode = msg.code;
+        send({ type: "joined", partyCode: msg.code, clientId, isHost });
+        sendPartyState(party);
+
+        if (party.members.length === 2) {
+          if (party.phase === "lobby") {
+            party.phase = "selecting";
+            await savePartyToDB(party);
+            broadcastToAll(party, { type: "phase_change", phase: "selecting" });
           }
-          currentPartyCode = msg.code;
-          send({ type: "joined", partyCode: msg.code, clientId, isHost });
           sendPartyState(party);
-          if (party.members.length === 2) {
-            if (party.phase === "lobby") {
-              party.phase = "selecting";
-              await savePartyToDB(party);
-              broadcastToAll(party, { type: "phase_change", phase: "selecting" });
-            }
-            sendPartyState(party);
-          }
         }
 
       } else if (msg.type === "select_movies" && currentPartyCode) {
@@ -379,6 +392,8 @@ wss.on("connection", (ws) => {
   });
 });
 
-server.listen(port, () => {
-  logger.info({ port }, "Server listening with WebSocket support");
+ensureSchema().then(() => {
+  server.listen(port, () => {
+    logger.info({ port }, "Server listening with WebSocket support");
+  });
 });
