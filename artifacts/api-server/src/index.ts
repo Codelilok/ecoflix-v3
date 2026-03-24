@@ -1,20 +1,14 @@
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { Pool } from "pg";
+import { randomUUID } from "crypto";
 import app from "./app";
 import { logger } from "./lib/logger";
 
 const rawPort = process.env["PORT"];
-
-if (!rawPort) {
-  throw new Error("PORT environment variable is required but was not provided.");
-}
-
+if (!rawPort) throw new Error("PORT environment variable is required but was not provided.");
 const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
+if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${rawPort}"`);
 
 const pool = new Pool({ connectionString: process.env["DATABASE_URL"] });
 
@@ -45,6 +39,7 @@ interface PlaybackState {
 
 interface PartyState {
   code: string;
+  hostToken: string;
   members: PartyMember[];
   phase: "lobby" | "selecting" | "flipping" | "watching" | "done";
   movies: WatchPartyMovie[];
@@ -58,8 +53,8 @@ let clientIdCounter = 0;
 async function savePartyToDB(party: PartyState): Promise<void> {
   try {
     await pool.query(
-      `INSERT INTO parties (code, phase, movies, current_movie_idx, playback_state)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO parties (code, host_token, phase, movies, current_movie_idx, playback_state)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (code) DO UPDATE
        SET phase = EXCLUDED.phase,
            movies = EXCLUDED.movies,
@@ -67,6 +62,7 @@ async function savePartyToDB(party: PartyState): Promise<void> {
            playback_state = EXCLUDED.playback_state`,
       [
         party.code,
+        party.hostToken,
         party.phase,
         JSON.stringify(party.movies),
         party.currentMovieIdx,
@@ -93,6 +89,7 @@ async function loadPartyFromDB(code: string): Promise<Omit<PartyState, "members"
     const row = result.rows[0];
     return {
       code: row.code,
+      hostToken: row.host_token || "",
       phase: row.phase,
       movies: row.movies || [],
       currentMovieIdx: row.current_movie_idx,
@@ -111,18 +108,14 @@ function generateCode(): string {
 function broadcastToAll(party: PartyState, message: object): void {
   const data = JSON.stringify(message);
   for (const member of party.members) {
-    if (member.ws.readyState === WebSocket.OPEN) {
-      member.ws.send(data);
-    }
+    if (member.ws.readyState === WebSocket.OPEN) member.ws.send(data);
   }
 }
 
 function broadcastExcept(party: PartyState, message: object, excludeId: string): void {
   const data = JSON.stringify(message);
   for (const member of party.members) {
-    if (member.id !== excludeId && member.ws.readyState === WebSocket.OPEN) {
-      member.ws.send(data);
-    }
+    if (member.id !== excludeId && member.ws.readyState === WebSocket.OPEN) member.ws.send(data);
   }
 }
 
@@ -153,9 +146,7 @@ wss.on("connection", (ws) => {
   let currentPartyCode: string | null = null;
 
   const send = (msg: object) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(msg));
-    }
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   };
 
   ws.on("message", async (raw) => {
@@ -165,8 +156,10 @@ wss.on("connection", (ws) => {
       if (msg.type === "create_party") {
         let code = generateCode();
         while (parties.has(code)) code = generateCode();
+        const hostToken = randomUUID();
         const party: PartyState = {
           code,
+          hostToken,
           members: [{ id: clientId, name: msg.name, ws }],
           phase: "lobby",
           movies: [],
@@ -176,8 +169,9 @@ wss.on("connection", (ws) => {
         parties.set(code, party);
         currentPartyCode = code;
         await savePartyToDB(party);
-        send({ type: "joined", partyCode: code, clientId, isHost: true });
+        send({ type: "joined", partyCode: code, clientId, isHost: true, hostToken });
         sendPartyState(party);
+
       } else if (msg.type === "join_party") {
         let party = parties.get(msg.code);
 
@@ -195,19 +189,35 @@ wss.on("connection", (ws) => {
           send({ type: "error", message: "This party is already full." });
           return;
         }
-        const isHost = party.members.length === 0;
-        party.members.push({ id: clientId, name: msg.name, ws });
-        currentPartyCode = msg.code;
-        send({ type: "joined", partyCode: msg.code, clientId, isHost });
-        sendPartyState(party);
-        if (party.members.length === 2) {
-          if (party.phase === "lobby") {
-            party.phase = "selecting";
-            await savePartyToDB(party);
-            broadcastToAll(party, { type: "phase_change", phase: "selecting" });
-          }
+
+        const providedToken = msg.hostToken || "";
+        const isHost = party.members.length === 0
+          ? (providedToken === party.hostToken)
+          : false;
+
+        if (party.members.length === 0 && !isHost) {
+          party.members.push({ id: clientId, name: msg.name, ws });
+          currentPartyCode = msg.code;
+          send({ type: "joined", partyCode: msg.code, clientId, isHost: false });
           sendPartyState(party);
+        } else {
+          party.members.push({ id: clientId, name: msg.name, ws });
+          if (isHost) {
+            party.members = [party.members[party.members.length - 1], ...party.members.slice(0, -1)];
+          }
+          currentPartyCode = msg.code;
+          send({ type: "joined", partyCode: msg.code, clientId, isHost });
+          sendPartyState(party);
+          if (party.members.length === 2) {
+            if (party.phase === "lobby") {
+              party.phase = "selecting";
+              await savePartyToDB(party);
+              broadcastToAll(party, { type: "phase_change", phase: "selecting" });
+            }
+            sendPartyState(party);
+          }
         }
+
       } else if (msg.type === "select_movies" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
@@ -226,6 +236,7 @@ wss.on("connection", (ws) => {
           });
           sendPartyState(party);
         }
+
       } else if (msg.type === "flip_result" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
@@ -237,6 +248,7 @@ wss.on("connection", (ws) => {
         await savePartyToDB(party);
         broadcastToAll(party, { type: "flip_result", movies: party.movies });
         sendPartyState(party);
+
       } else if (msg.type === "swap_movies" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
@@ -245,26 +257,25 @@ wss.on("connection", (ws) => {
         party.movies = [party.movies[1], party.movies[0]];
         await savePartyToDB(party);
         broadcastToAll(party, { type: "flip_result", movies: party.movies });
+
       } else if (msg.type === "playback" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         party.playbackState = { playing: msg.playing, time: msg.time, updatedAt: Date.now() };
         broadcastExcept(party, { type: "playback", playing: msg.playing, time: msg.time }, clientId);
+
       } else if (msg.type === "chat" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         const member = party.members.find((m) => m.id === clientId);
-        broadcastToAll(party, {
-          type: "chat",
-          from: member?.name || "Unknown",
-          message: msg.message,
-          ts: Date.now(),
-        });
+        broadcastToAll(party, { type: "chat", from: member?.name || "Unknown", message: msg.message, ts: Date.now() });
+
       } else if (msg.type === "typing" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         const member = party.members.find((m) => m.id === clientId);
         broadcastExcept(party, { type: "typing", from: member?.name, isTyping: msg.isTyping }, clientId);
+
       } else if (msg.type === "next_movie" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
@@ -274,31 +285,31 @@ wss.on("connection", (ws) => {
           party.currentMovieIdx++;
           party.playbackState = { playing: false, time: 0, updatedAt: Date.now() };
           await savePartyToDB(party);
-          broadcastToAll(party, {
-            type: "next_movie",
-            movieIdx: party.currentMovieIdx,
-            movie: party.movies[party.currentMovieIdx],
-          });
+          broadcastToAll(party, { type: "next_movie", movieIdx: party.currentMovieIdx, movie: party.movies[party.currentMovieIdx] });
           sendPartyState(party);
         } else {
           party.phase = "done";
           await savePartyToDB(party);
           sendPartyState(party);
         }
+
       } else if (msg.type === "stream_url" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         const isHost = party.members[0]?.id === clientId;
         if (!isHost) return;
         broadcastToAll(party, { type: "stream_url", url: msg.url });
+
       } else if (msg.type === "quality_select" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         broadcastExcept(party, { type: "quality_select", label: msg.label }, clientId);
+
       } else if (msg.type === "subtitle_select" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         broadcastExcept(party, { type: "subtitle_select", label: msg.label }, clientId);
+
       } else if (msg.type === "change_episode" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
@@ -308,27 +319,24 @@ wss.on("connection", (ws) => {
         movie.episode = String(msg.episode);
         party.playbackState = { playing: false, time: 0, updatedAt: Date.now() };
         await savePartyToDB(party);
-        broadcastToAll(party, {
-          type: "episode_changed",
-          season: msg.season,
-          episode: msg.episode,
-        });
+        broadcastToAll(party, { type: "episode_changed", season: msg.season, episode: msg.episode });
         sendPartyState(party);
+
       } else if (msg.type === "start_watching" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         party.phase = "watching";
-        if (!party.playbackState) {
-          party.playbackState = { playing: false, time: 0, updatedAt: Date.now() };
-        }
+        if (!party.playbackState) party.playbackState = { playing: false, time: 0, updatedAt: Date.now() };
         await savePartyToDB(party);
         sendPartyState(party);
+
       } else if (msg.type === "end_party" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
         party.phase = "done";
         await savePartyToDB(party);
         sendPartyState(party);
+
       } else if (msg.type === "leave_party" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (party) {
@@ -358,7 +366,8 @@ wss.on("connection", (ws) => {
     if (!party) return;
     party.members = party.members.filter((m) => m.id !== clientId);
     if (party.members.length === 0) {
-      parties.delete(currentPartyCode);
+      // Keep party in memory (and DB) so the host can reconnect using their token.
+      // The party will be cleaned up when someone explicitly leaves via leave_party.
     } else {
       broadcastToAll(party, { type: "member_left" });
       if (party.phase === "selecting" || party.phase === "flipping") {

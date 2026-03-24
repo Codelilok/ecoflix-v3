@@ -500,6 +500,9 @@ export default function WatchParty() {
           setClientId(msg.clientId);
           setIsHost(msg.isHost);
           isHostRef.current = msg.isHost;
+          if (msg.hostToken) {
+            sessionStorage.setItem(`wp_token_${msg.partyCode}`, msg.hostToken);
+          }
           setAppPhase("lobby");
         } else if (msg.type === "error") {
           setError(msg.message);
@@ -610,7 +613,9 @@ export default function WatchParty() {
     if (!name.trim()) { setError("Please enter your name."); return; }
     if (!joinCode.trim() || joinCode.trim().length !== 6) { setError("Enter a valid 6-digit code."); return; }
     setError("");
-    connectWS((ws) => ws.send(JSON.stringify({ type: "join_party", name: name.trim(), code: joinCode.trim() })));
+    const code = joinCode.trim();
+    const hostToken = sessionStorage.getItem(`wp_token_${code}`) || undefined;
+    connectWS((ws) => ws.send(JSON.stringify({ type: "join_party", name: name.trim(), code, hostToken })));
   };
 
   const handleCopyCode = () => {
