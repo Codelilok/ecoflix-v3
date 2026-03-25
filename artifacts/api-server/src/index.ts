@@ -59,6 +59,7 @@ interface PlaybackState {
 interface PartyState {
   code: string;
   hostToken: string;
+  hostClientId: string;
   members: PartyMember[];
   phase: "lobby" | "selecting" | "flipping" | "watching" | "done";
   movies: WatchPartyMovie[];
@@ -109,6 +110,7 @@ async function loadPartyFromDB(code: string): Promise<Omit<PartyState, "members"
     return {
       code: row.code,
       hostToken: row.host_token || "",
+      hostClientId: "",
       phase: row.phase,
       movies: row.movies || [],
       currentMovieIdx: row.current_movie_idx,
@@ -148,6 +150,7 @@ function sendPartyState(party: PartyState): void {
     type: "party_state",
     party: {
       code: party.code,
+      hostId: party.hostClientId,
       members: safeMembers,
       phase: party.phase,
       currentMovieIdx: party.currentMovieIdx,
@@ -179,6 +182,7 @@ wss.on("connection", (ws) => {
         const party: PartyState = {
           code,
           hostToken,
+          hostClientId: clientId,
           members: [{ id: clientId, name: msg.name, ws }],
           phase: "lobby",
           movies: [],
@@ -214,6 +218,7 @@ wss.on("connection", (ws) => {
 
         const newMember = { id: clientId, name: msg.name, ws };
         if (isHost) {
+          party.hostClientId = clientId;
           party.members = [newMember, ...party.members];
         } else {
           party.members = [...party.members, newMember];
@@ -253,7 +258,7 @@ wss.on("connection", (ws) => {
       } else if (msg.type === "flip_result" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
-        const isHost = party.members[0]?.id === clientId;
+        const isHost = party.hostClientId === clientId;
         if (!isHost) return;
         party.movies = msg.movies;
         party.phase = "watching";
@@ -265,7 +270,7 @@ wss.on("connection", (ws) => {
       } else if (msg.type === "swap_movies" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
-        const isHost = party.members[0]?.id === clientId;
+        const isHost = party.hostClientId === clientId;
         if (!isHost) return;
         party.movies = [party.movies[1], party.movies[0]];
         await savePartyToDB(party);
@@ -292,7 +297,7 @@ wss.on("connection", (ws) => {
       } else if (msg.type === "next_movie" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
-        const isHost = party.members[0]?.id === clientId;
+        const isHost = party.hostClientId === clientId;
         if (!isHost) return;
         if (party.currentMovieIdx < party.movies.length - 1) {
           party.currentMovieIdx++;
@@ -309,7 +314,7 @@ wss.on("connection", (ws) => {
       } else if (msg.type === "stream_url" && currentPartyCode) {
         const party = parties.get(currentPartyCode);
         if (!party) return;
-        const isHost = party.members[0]?.id === clientId;
+        const isHost = party.hostClientId === clientId;
         if (!isHost) return;
         broadcastToAll(party, { type: "stream_url", url: msg.url });
 

@@ -74,6 +74,7 @@ interface PartyMember {
 
 interface PartyStateData {
   code: string;
+  hostId: string;
   members: PartyMember[];
   phase: string;
   currentMovieIdx: number;
