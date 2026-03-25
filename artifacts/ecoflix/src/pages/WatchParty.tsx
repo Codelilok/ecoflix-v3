@@ -486,12 +486,7 @@ export default function WatchParty() {
     }
   }, []);
 
-  const connectWS = useCallback((onOpen: (ws: WebSocket) => void) => {
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${proto}//${window.location.host}/api/ws`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
+  const attachWsHandlers = useCallback((ws: WebSocket, onOpen: (ws: WebSocket) => void, attempt: number, maxAttempts: number, retryFn: () => void) => {
     ws.onopen = () => onOpen(ws);
 
     ws.onmessage = (e) => {
@@ -603,8 +598,34 @@ export default function WatchParty() {
       } catch {}
     };
 
-    ws.onerror = () => setError("Connection error. Please try again.");
+    ws.onerror = () => {
+      if (attempt < maxAttempts) {
+        setError(`Connecting... (attempt ${attempt + 1}/${maxAttempts})`);
+        setTimeout(retryFn, 1500);
+      } else {
+        setError("Could not connect to server. Please check your internet and try again.");
+      }
+    };
+
+    ws.onclose = (event) => {
+      if (wsRef.current !== ws) return;
+      if (appPhaseRef.current === "entry") return;
+      if (event.wasClean && event.code === 1000) return;
+      setError("Connection lost. Please refresh and try again.");
+    };
   }, [sendWS]);
+
+  const connectWS = useCallback((onOpen: (ws: WebSocket) => void, attempt = 1) => {
+    const maxAttempts = 3;
+    if (wsRef.current && wsRef.current.readyState < WebSocket.CLOSING) {
+      wsRef.current.close();
+    }
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${proto}//${window.location.host}/api/ws`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+    attachWsHandlers(ws, onOpen, attempt, maxAttempts, () => connectWS(onOpen, attempt + 1));
+  }, [attachWsHandlers]);
 
   const handleCreate = () => {
     if (!name.trim()) { setError("Please enter your name."); return; }
