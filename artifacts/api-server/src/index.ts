@@ -316,7 +316,7 @@ wss.on("connection", (ws) => {
         if (!party) return;
         const isHost = party.hostClientId === clientId;
         if (!isHost) return;
-        broadcastToAll(party, { type: "stream_url", url: msg.url });
+        broadcastExcept(party, { type: "stream_url", url: msg.url }, clientId);
 
       } else if (msg.type === "quality_select" && currentPartyCode) {
         const party = parties.get(currentPartyCode);

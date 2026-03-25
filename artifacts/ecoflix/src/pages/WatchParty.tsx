@@ -571,6 +571,10 @@ export default function WatchParty() {
           setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         } else if (msg.type === "typing") {
           setTypingFrom(msg.isTyping ? msg.from : null);
+        } else if (msg.type === "stream_url") {
+          setCurrentStreamUrl(msg.url);
+          setQualityPicked(true);
+          setStreamLoading(false);
         } else if (msg.type === "quality_select") {
           setPendingQualityLabel(msg.label);
         } else if (msg.type === "subtitle_select") {
@@ -851,8 +855,12 @@ export default function WatchParty() {
           }))
           .filter((o) => o.url);
         if (options.length <= 1) {
-          setCurrentStreamUrl(options[0]?.url || "");
+          const autoUrl = options[0]?.url || "";
+          setCurrentStreamUrl(autoUrl);
           setQualityPicked(true);
+          if (isHostRef.current && autoUrl) {
+            sendWS({ type: "stream_url", url: autoUrl });
+          }
         } else {
           setAvailableStreams(options);
         }
@@ -864,7 +872,7 @@ export default function WatchParty() {
       })
       .catch(() => setCurrentStreamUrl(""))
       .finally(() => setStreamLoading(false));
-  }, [currentMovieForFetch?.id, currentMovieForFetch?.season, currentMovieForFetch?.episode, appPhase]);
+  }, [currentMovieForFetch?.id, currentMovieForFetch?.season, currentMovieForFetch?.episode, appPhase, sendWS]);
 
   useEffect(() => {
     if (activeSubtitle === "off") { setSubtitleCues([]); return; }
@@ -908,10 +916,11 @@ export default function WatchParty() {
     if (appPhase !== "watching") return;
     const interval = setInterval(() => {
       const video = videoRef.current;
-      if (video && isHostRef.current) {
-        sendWS({ type: "playback", playing: !video.paused, time: video.currentTime });
+      if (video && isHostRef.current && video.readyState >= 2) {
+        const playing = !video.paused && !video.ended;
+        sendWS({ type: "playback", playing, time: video.currentTime });
       }
-    }, 4000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [appPhase, sendWS]);
 
@@ -1420,6 +1429,7 @@ export default function WatchParty() {
                             setCurrentStreamUrl(s.url);
                             setQualityPicked(true);
                             sendWS({ type: "quality_select", label: s.label });
+                            if (isHost) sendWS({ type: "stream_url", url: s.url });
                           }}
                           className="w-full flex items-center justify-between px-5 py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-red-500 rounded-xl transition-colors"
                         >
