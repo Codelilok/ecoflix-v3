@@ -187,7 +187,7 @@ export default function Player() {
     const onEnded = () => { setIsPlaying(false); setShowControls(true); };
     const onLoadedData = () => {
       setIsBuffering(false);
-      const saved = getProgress(id);
+      const saved = getProgress(id, season, episode);
       if (saved > 0 && saved < 98 && video.duration) {
         video.currentTime = (saved / 100) * video.duration;
       }

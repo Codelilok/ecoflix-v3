@@ -467,6 +467,7 @@ export default function WatchParty() {
   const pendingPlayRef = useRef<{ playing: boolean; time: number } | null>(null);
 
   const isHostRef = useRef(false);
+  const appPhaseRef = useRef<AppPhase>(appPhase);
   const wsRef = useRef<WebSocket | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -474,8 +475,9 @@ export default function WatchParty() {
   const syncThrottle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  /* keep showChatRef in sync so WS handler can read it without stale closure */
+  /* keep refs in sync so WS handler can read current values without stale closures */
   useEffect(() => { showChatRef.current = showChat; }, [showChat]);
+  useEffect(() => { appPhaseRef.current = appPhase; }, [appPhase]);
 
   const sendWS = useCallback((msg: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -509,12 +511,12 @@ export default function WatchParty() {
         } else if (msg.type === "party_state") {
           const ps: PartyStateData = msg.party;
           setPartyState(ps);
-          if (ps.phase === "selecting" && appPhase !== "selecting") {
+          if (ps.phase === "selecting" && appPhaseRef.current !== "selecting") {
             setAppPhase("selecting");
           } else if (ps.phase === "done") {
             setAppPhase("done");
           }
-          if ((ps.phase === "watching") && ps.movies.length > 0 && appPhase !== "watching") {
+          if ((ps.phase === "watching") && ps.movies.length > 0 && appPhaseRef.current !== "watching") {
             setAppPhase("watching");
           }
         } else if (msg.type === "phase_change") {
@@ -601,7 +603,7 @@ export default function WatchParty() {
     };
 
     ws.onerror = () => setError("Connection error. Please try again.");
-  }, [appPhase, isHost, sendWS]);
+  }, [sendWS]);
 
   const handleCreate = () => {
     if (!name.trim()) { setError("Please enter your name."); return; }

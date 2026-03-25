@@ -69,15 +69,23 @@ export function useContinueWatching() {
 
   const saveProgress = (item: Omit<ContinueWatchingItem, 'timestamp'>) => {
     setContinueList(prev => {
-      const filtered = prev.filter(i => String(i.id) !== String(item.id));
+      const filtered = prev.filter(i => !(
+        String(i.id) === String(item.id) &&
+        i.season === item.season &&
+        i.episode === item.episode
+      ));
       if (item.progress > 98) return filtered;
       const updated = [{ ...item, timestamp: Date.now() }, ...filtered];
       return updated.slice(0, 20);
     });
   };
 
-  const getProgress = (id: string | number) => {
-    return continueList.find(i => String(i.id) === String(id))?.progress || 0;
+  const getProgress = (id: string | number, season?: string, episode?: string) => {
+    return continueList.find(i =>
+      String(i.id) === String(id) &&
+      i.season === season &&
+      i.episode === episode
+    )?.progress || 0;
   };
 
   const removeFromContinueWatching = (id: string | number) => {
