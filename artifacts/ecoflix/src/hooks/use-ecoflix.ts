@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { MediaItem, MediaDetail, PlayResponse } from "@/lib/api-types";
+import { MediaItem, MediaDetail, PlayResponse, ApiSeason, SeasonItem, EpisodeItem } from "@/lib/api-types";
 
 const BASE_URL = "https://movieapi.xcasper.space/api";
 
@@ -58,15 +58,39 @@ export function useSearch(keyword: string) {
   });
 }
 
+function parseApiSeasons(apiSeasons: ApiSeason[]): SeasonItem[] {
+  return apiSeasons.map((s) => {
+    let epNums: number[];
+    if (s.allEp && s.allEp.trim() !== "") {
+      epNums = s.allEp.split(",").map((n) => parseInt(n.trim(), 10)).filter((n) => !isNaN(n));
+    } else {
+      epNums = Array.from({ length: s.maxEp }, (_, i) => i + 1);
+    }
+    const episodes: EpisodeItem[] = epNums.map((num) => ({ episodeNumber: num }));
+    return { seasonNumber: s.se, episodes };
+  });
+}
+
 export function useDetail(subjectId: string) {
   return useQuery({
     queryKey: ["detail", subjectId],
     queryFn: async () => {
-      const data = await fetchApi<{ subject: MediaDetail; stars: unknown[]; resource: unknown[] }>(`/detail?subjectId=${subjectId}`);
+      const data = await fetchApi<{
+        subject: MediaDetail & { totalSeasons?: number; totalEpisodes?: number };
+        stars: unknown[];
+        resource: { seasons?: ApiSeason[] } | ApiSeason[];
+      }>(`/detail?subjectId=${subjectId}`);
+
+      const rawSeasons: ApiSeason[] = Array.isArray(data.resource)
+        ? (data.resource as ApiSeason[])
+        : ((data.resource as { seasons?: ApiSeason[] }).seasons ?? []);
+
       const detail: MediaDetail = {
         ...data.subject,
         stars: (data.stars as MediaDetail["stars"]) || [],
-        resource: (data.resource as MediaDetail["resource"]) || [],
+        resource: parseApiSeasons(rawSeasons),
+        totalSeasons: data.subject.totalSeasons,
+        totalEpisodes: data.subject.totalEpisodes,
       };
       return detail;
     },

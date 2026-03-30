@@ -229,7 +229,8 @@ export default function TVDetail() {
   const isSaved = isInWishlist(show.subjectId);
   const seasons = Array.isArray(show.resource) ? show.resource : [];
   const hasSeasons = seasons.length > 0;
-  const totalEpisodes = seasons.reduce((sum, s) => sum + (s.episodes?.length || 0), 0);
+  const totalEpisodes = show.totalEpisodes ?? seasons.reduce((sum, s) => sum + (s.episodes?.length || 0), 0);
+  const totalSeasons = show.totalSeasons ?? seasons.length;
 
   return (
     <Layout>
@@ -264,7 +265,7 @@ export default function TVDetail() {
                 {year && <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> {year}</span>}
                 {show.countryName && <span className="flex items-center gap-1 text-gray-300">{show.countryName}</span>}
                 <span className="px-2 py-0.5 border border-gray-600 rounded text-xs uppercase font-bold bg-black/40">TV Series</span>
-                {hasSeasons && <span className="text-gray-400">{seasons.length} Season{seasons.length !== 1 ? "s" : ""}</span>}
+                {hasSeasons && <span className="text-gray-400">{totalSeasons} Season{totalSeasons !== 1 ? "s" : ""}</span>}
                 {totalEpisodes > 0 && <span className="text-gray-400">{totalEpisodes} Episode{totalEpisodes !== 1 ? "s" : ""}</span>}
               </div>
 
@@ -350,7 +351,7 @@ export default function TVDetail() {
             /* Full accordion with season + episode data from API */
             <div className="space-y-3 max-w-2xl">
               {seasons.map((s, i) => {
-                const sNum = s.seasonNumber ?? s.season ?? (i + 1);
+                const sNum = s.seasonNumber;
                 const epCount = s.episodes?.length || 0;
                 const isExpanded = expandedSeasonIdx === i;
 
@@ -390,7 +391,7 @@ export default function TVDetail() {
                     {isExpanded && s.episodes && s.episodes.length > 0 && (
                       <div className="bg-zinc-950/60 divide-y divide-zinc-800/50">
                         {s.episodes.map((ep: EpisodeItem, epIdx: number) => {
-                          const epNum = ep.episodeNumber ?? ep.episode ?? (epIdx + 1);
+                          const epNum = ep.episodeNumber;
                           const epTitle = ep.title ?? ep.name ?? `Episode ${epNum}`;
 
                           return (

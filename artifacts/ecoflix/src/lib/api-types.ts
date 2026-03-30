@@ -26,8 +26,7 @@ export interface CastMember {
 }
 
 export interface EpisodeItem {
-  episodeId?: string;
-  episodeNumber?: number;
+  episodeNumber: number;
   episode?: number;
   title?: string;
   name?: string;
@@ -35,12 +34,21 @@ export interface EpisodeItem {
 }
 
 export interface SeasonItem {
-  seasonId?: string;
-  seasonNumber?: number;
-  season?: number;
+  seasonNumber: number;
   seasonName?: string;
-  title?: string;
-  episodes?: EpisodeItem[];
+  episodes: EpisodeItem[];
+}
+
+export interface ApiSeasonResolution {
+  resolution: number;
+  epNum: number;
+}
+
+export interface ApiSeason {
+  se: number;
+  maxEp: number;
+  allEp: string;
+  resolutions: ApiSeasonResolution[];
 }
 
 export interface MediaDetail {
@@ -56,6 +64,8 @@ export interface MediaDetail {
   countryName?: string;
   subtitles?: string;
   hasResource?: boolean;
+  totalSeasons?: number;
+  totalEpisodes?: number;
   stars?: CastMember[];
   resource?: SeasonItem[];
 }
