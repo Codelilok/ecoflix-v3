@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { usePlay, useDetail } from "@/hooks/use-ecoflix";
 import { useContinueWatching, useWatchHistory } from "@/hooks/use-local-state";
@@ -7,8 +7,33 @@ import { Stream, EpisodeItem, SeasonItem } from "@/lib/api-types";
 import {
   ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   RotateCcw, RotateCw, Settings, Loader2, AlertCircle, Check,
-  List, ChevronDown, X, Minus,
+  List, ChevronDown, X, Minus, SkipForward,
 } from "lucide-react";
+
+function getNextEpisode(
+  seasons: SeasonItem[],
+  currentSeason: string | undefined,
+  currentEpisode: string | undefined,
+): { seasonNum: number; epNum: number } | null {
+  if (!currentSeason || !currentEpisode || seasons.length === 0) return null;
+  const seNum = Number(currentSeason);
+  const epNum = Number(currentEpisode);
+  const seasonIdx = seasons.findIndex(s => s.seasonNumber === seNum);
+  if (seasonIdx === -1) return null;
+  const s = seasons[seasonIdx];
+  const epIdx = s.episodes.findIndex(ep => ep.episodeNumber === epNum);
+  if (epIdx === -1) return null;
+  if (epIdx + 1 < s.episodes.length) {
+    return { seasonNum: seNum, epNum: s.episodes[epIdx + 1].episodeNumber };
+  }
+  if (seasonIdx + 1 < seasons.length) {
+    const next = seasons[seasonIdx + 1];
+    if (next.episodes.length > 0) {
+      return { seasonNum: next.seasonNumber, epNum: next.episodes[0].episodeNumber };
+    }
+  }
+  return null;
+}
 
 /* ─── helpers ─── */
 
@@ -105,6 +130,7 @@ export default function Player() {
   const [epPickerModal, setEpPickerModal] = useState<{ season: number; ep: number } | null>(null);
   const [epPickerStreams, setEpPickerStreams] = useState<Stream[]>([]);
   const [epPickerLoading, setEpPickerLoading] = useState(false);
+  const [nextEpCountdown, setNextEpCountdown] = useState<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -112,8 +138,23 @@ export default function Player() {
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyLoggedRef = useRef(false);
   const savedTimeRef = useRef(0);
+  const nextEpRef = useRef<{ seasonNum: number; epNum: number } | null>(null);
 
   const title = getTitle(detailData);
+  const nextEp = useMemo(() => getNextEpisode(seasons, season, episode), [seasons, season, episode]);
+  nextEpRef.current = nextEp;
+
+  /* countdown to auto-play next episode */
+  useEffect(() => {
+    if (nextEpCountdown === null) return;
+    if (nextEpCountdown <= 0) {
+      if (nextEp) streamEpisode(nextEp.seasonNum, nextEp.epNum);
+      setNextEpCountdown(null);
+      return;
+    }
+    const t = setTimeout(() => setNextEpCountdown(c => (c !== null ? c - 1 : null)), 1000);
+    return () => clearTimeout(t);
+  }, [nextEpCountdown, nextEp]);
 
   /* reset stream when episode/movie changes */
   useEffect(() => {
@@ -184,7 +225,13 @@ export default function Player() {
       }
     };
     const onDuration = () => setDuration(video.duration);
-    const onEnded = () => { setIsPlaying(false); setShowControls(true); };
+    const onEnded = () => {
+      setIsPlaying(false);
+      setShowControls(true);
+      if (type === "tv" && nextEpRef.current) {
+        setNextEpCountdown(10);
+      }
+    };
     const onLoadedData = () => {
       setIsBuffering(false);
       const saved = getProgress(id, season, episode);
@@ -770,7 +817,7 @@ export default function Player() {
               ) : (
                 /* Full accordion with season data */
                 seasons.map((s: SeasonItem, i: number) => {
-                  const sNum = s.seasonNumber ?? s.season ?? (i + 1);
+                  const sNum = s.seasonNumber;
                   const epCount = s.episodes?.length || 0;
                   const isOpen = expandedSeason === i;
 
@@ -795,7 +842,7 @@ export default function Player() {
                       {isOpen && s.episodes && s.episodes.length > 0 && (
                         <div className="bg-zinc-950/60">
                           {s.episodes.map((ep: EpisodeItem, epIdx: number) => {
-                            const epNum = ep.episodeNumber ?? ep.episode ?? (epIdx + 1);
+                            const epNum = ep.episodeNumber;
                             const epTitle = ep.title ?? ep.name ?? `Episode ${epNum}`;
                             const isCurrent = String(sNum) === season && String(epNum) === episode;
 
@@ -828,6 +875,43 @@ export default function Player() {
                   );
                 })
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Auto-play next episode countdown overlay ── */}
+      {nextEpCountdown !== null && nextEp && (
+        <div className="absolute bottom-28 right-6 z-40 flex flex-col items-end gap-3 animate-fade-in">
+          <div className="bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-2xl p-4 shadow-2xl w-72">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0">
+                <SkipForward className="h-4 w-4 text-white fill-current" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Up Next</p>
+                <p className="text-white font-bold text-sm">
+                  S{nextEp.seasonNum} · Episode {nextEp.epNum}
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-full border-2 border-red-500 flex items-center justify-center flex-shrink-0">
+                <span className="text-red-400 font-black text-base tabular-nums">{nextEpCountdown}</span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setNextEpCountdown(null); streamEpisode(nextEp.seasonNum, nextEp.epNum); }}
+                className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-colors active:scale-95"
+              >
+                <Play className="h-3.5 w-3.5 fill-current" />
+                Play Now
+              </button>
+              <button
+                onClick={() => setNextEpCountdown(null)}
+                className="px-4 py-2.5 rounded-xl border border-zinc-600 bg-zinc-800 hover:bg-zinc-700 text-gray-300 text-sm font-semibold transition-colors"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -882,6 +966,11 @@ export default function Player() {
           100% { transform: scale(1.6); opacity: 0; }
         }
         .animate-ping-once { animation: ping-once 0.7s ease-out forwards; }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in 0.25s ease-out forwards; }
         video::-webkit-media-controls { display: none !important; }
         video::-webkit-media-controls-enclosure { display: none !important; }
       `}</style>
