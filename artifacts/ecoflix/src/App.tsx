@@ -15,6 +15,7 @@ import Category from "./pages/Category";
 import WatchHistory from "./pages/WatchHistory";
 import WatchParty from "./pages/WatchParty";
 import SharedWishlist from "./pages/SharedWishlist";
+import Sports from "./pages/Sports";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/movie/:id" component={MovieDetail} />
       <Route path="/tv/:id" component={TVDetail} />
       <Route path="/player" component={Player} />
+      <Route path="/sports" component={Sports} />
       <Route component={NotFound} />
     </Switch>
   );

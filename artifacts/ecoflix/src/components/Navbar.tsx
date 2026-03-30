@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock, Users, Dice6, Download, Share, ArrowUpFromLine } from "lucide-react";
+import { Search, Heart, Menu, X, History, Home, BarChart2, Grid, Clock, Users, Dice6, Download, Share, ArrowUpFromLine, Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePWAInstall } from "@/hooks/use-pwa-install";
 import { SurpriseMe } from "./SurpriseMe";
@@ -92,6 +92,7 @@ export function Navbar() {
     { name: "Home", path: "/", icon: Home },
     { name: "Browse", path: "/browse", icon: Grid },
     { name: "Rankings", path: "/ranking", icon: BarChart2 },
+    { name: "Sports", path: "/sports", icon: Wifi },
     { name: "My Wishlist", path: "/wishlist", icon: Heart },
     { name: "Watch History", path: "/history", icon: Clock },
     { name: "Watch Party", path: "/watch-party", icon: Users },
