@@ -74,43 +74,35 @@ router.get("/dl/proxy", async (req, res) => {
   }
 });
 
-/* ── YouTube: resolve + stream in one shot (avoids IP-locked signed URLs) ── */
+/* ── YouTube: resolve + stream using yt-dl3 (serves real file content) ── */
 router.get("/dl/yt-stream", async (req, res) => {
-  const { url, label } = req.query as Record<string, string>;
+  const { url } = req.query as Record<string, string>;
   if (!url) { res.status(400).json({ error: "Missing url" }); return; }
   try {
-    const json = await proxyFetch(`${CASPER_DL}/yt-dl?url=${encodeURIComponent(url)}`);
+    const json = await proxyFetch(`${CASPER_DL}/yt-dl3?url=${encodeURIComponent(url)}`);
     if (!json.success) throw new Error(json.message || "Could not fetch YouTube video");
-    const medias: any[] = json.medias ?? [];
-    if (medias.length === 0) throw new Error("No formats returned");
-    const preferred = medias.find((m: any) => m.type === "video" && m.url && m.quality?.includes("360")) ??
-      medias.find((m: any) => m.type === "video" && m.url) ??
-      medias.find((m: any) => m.url);
-    if (!preferred?.url) throw new Error("No usable download URL found");
-    const title = (json.title ?? "youtube-video").slice(0, 60);
-    await streamUpstream(preferred.url, title, res);
+    const dlUrl: string = json.download_url ?? json.url ?? "";
+    if (!dlUrl) throw new Error("No download URL returned");
+    const title = (json.title ?? "youtube-video").slice(0, 80);
+    await streamUpstream(dlUrl, title, res);
   } catch (err: any) {
     if (!res.headersSent) res.status(500).json({ error: err.message || "YouTube stream failed" });
   }
 });
 
-/* ── YouTube metadata (for showing quality options) ── */
+/* ── YouTube metadata ── */
 router.get("/dl/yt-info", async (req, res) => {
   const { url } = req.query as Record<string, string>;
   if (!url) { res.status(400).json({ error: "Missing url" }); return; }
   try {
-    const json = await proxyFetch(`${CASPER_DL}/yt-dl?url=${encodeURIComponent(url)}`);
+    const json = await proxyFetch(`${CASPER_DL}/yt-dl3?url=${encodeURIComponent(url)}`);
     if (!json.success) throw new Error(json.message || "Could not fetch YouTube info");
-    const medias: any[] = json.medias ?? [];
-    const links = medias
-      .filter((m: any) => m.url)
-      .map((m: any) => ({
-        label: m.type === "audio" ? `Audio (${m.ext?.toUpperCase() ?? "M4A"})` : m.quality ?? m.label ?? "Video",
-        streamUrl: `/api/dl/yt-stream?url=${encodeURIComponent(url)}&q=${encodeURIComponent(m.quality ?? "")}`,
-        type: m.type === "audio" ? "audio" : "video",
-      }));
-    if (links.length === 0) throw new Error("No download formats found");
-    res.json({ ok: true, title: json.title, thumbnail: json.thumbnail, links });
+    const streamUrl = `/api/dl/yt-stream?url=${encodeURIComponent(url)}`;
+    const label = json.format === "mp3"
+      ? `Audio MP3 (${json.quality ?? "128kbps"})`
+      : `Video (${json.quality ?? "HD"})`;
+    const type = json.format === "mp3" ? "audio" : "video";
+    res.json({ ok: true, title: json.title, thumbnail: json.thumbnail, links: [{ label, streamUrl, type }] });
   } catch (err: any) {
     res.status(500).json({ error: err.message || "Failed to fetch" });
   }
