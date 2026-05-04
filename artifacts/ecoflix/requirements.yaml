@@ -1,0 +1,13 @@
+packages:
+  "framer-motion": "For cinematic page transitions and smooth UI animations"
+  "embla-carousel-react": "For Netflix-style horizontal scrollable content rows"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility to merge Tailwind CSS classes without style conflicts"
+  "date-fns": "For human-readable date formatting"
+  "usehooks-ts": "For reliable useLocalStorage and useDebounce hooks"
+
+images: []
+
+notes:
+  - "Using pure frontend external API from https://movieapi.xcasper.space"
+  - "App relies entirely on localStorage for user state (Wishlist, Continue Watching)"
