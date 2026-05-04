@@ -74,14 +74,15 @@ router.get("/dl/proxy", async (req, res) => {
   }
 });
 
-/* ── YouTube: resolve + stream using yt-dl3 (serves real file content) ── */
+/* ── YouTube: resolve + stream (type=video uses ytmp6, type=audio uses yt-dl3) ── */
 router.get("/dl/yt-stream", async (req, res) => {
-  const { url } = req.query as Record<string, string>;
+  const { url, type } = req.query as Record<string, string>;
   if (!url) { res.status(400).json({ error: "Missing url" }); return; }
   try {
-    const json = await proxyFetch(`${CASPER_DL}/yt-dl3?url=${encodeURIComponent(url)}`);
-    if (!json.success) throw new Error(json.message || "Could not fetch YouTube video");
-    const dlUrl: string = json.download_url ?? json.url ?? "";
+    const endpoint = type === "audio" ? "yt-dl3" : "ytmp6";
+    const json = await proxyFetch(`${CASPER_DL}/${endpoint}?url=${encodeURIComponent(url)}`);
+    if (!json.success) throw new Error(json.message || "Could not fetch YouTube media");
+    const dlUrl: string = json.url ?? json.download_url ?? "";
     if (!dlUrl) throw new Error("No download URL returned");
     const title = (json.title ?? "youtube-video").slice(0, 80);
     await streamUpstream(dlUrl, title, res);
@@ -90,19 +91,24 @@ router.get("/dl/yt-stream", async (req, res) => {
   }
 });
 
-/* ── YouTube metadata ── */
+/* ── YouTube metadata: returns both MP4 and MP3 options ── */
 router.get("/dl/yt-info", async (req, res) => {
   const { url } = req.query as Record<string, string>;
   if (!url) { res.status(400).json({ error: "Missing url" }); return; }
   try {
-    const json = await proxyFetch(`${CASPER_DL}/yt-dl3?url=${encodeURIComponent(url)}`);
-    if (!json.success) throw new Error(json.message || "Could not fetch YouTube info");
-    const streamUrl = `/api/dl/yt-stream?url=${encodeURIComponent(url)}`;
-    const label = json.format === "mp3"
-      ? `Audio MP3 (${json.quality ?? "128kbps"})`
-      : `Video (${json.quality ?? "HD"})`;
-    const type = json.format === "mp3" ? "audio" : "video";
-    res.json({ ok: true, title: json.title, thumbnail: json.thumbnail, links: [{ label, streamUrl, type }] });
+    const [videoJson, audioJson] = await Promise.allSettled([
+      proxyFetch(`${CASPER_DL}/ytmp6?url=${encodeURIComponent(url)}`),
+      proxyFetch(`${CASPER_DL}/yt-dl3?url=${encodeURIComponent(url)}`),
+    ]);
+    const video = videoJson.status === "fulfilled" && videoJson.value?.success ? videoJson.value : null;
+    const audio = audioJson.status === "fulfilled" && audioJson.value?.success ? audioJson.value : null;
+    if (!video && !audio) throw new Error("Could not fetch YouTube info");
+    const enc = encodeURIComponent(url);
+    const links: any[] = [];
+    if (video) links.push({ label: `Video MP4 (${video.quality ?? "360p"})`, streamUrl: `/api/dl/yt-stream?url=${enc}&type=video`, type: "video" });
+    if (audio) links.push({ label: `Audio MP3 (${audio.quality ?? "128kbps"})`, streamUrl: `/api/dl/yt-stream?url=${enc}&type=audio`, type: "audio" });
+    const meta = video ?? audio;
+    res.json({ ok: true, title: meta.title, thumbnail: meta.thumbnail, links });
   } catch (err: any) {
     res.status(500).json({ error: err.message || "Failed to fetch" });
   }
