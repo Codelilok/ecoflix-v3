@@ -137,17 +137,17 @@ interface DLResult {
   snapGrid?: { thumbnail?: string; url: string; title?: string }[];
 }
 
-/* ─── Instant download helper — always goes through our server proxy ─── */
-function proxyDownloadUrl(url: string, name: string) {
-  return `/api/dl/proxy?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`;
-}
-
+/* ─── Instant download helper ─── */
 async function triggerDownload(url: string, name = "download", setDlLoading?: (v: boolean) => void) {
   setDlLoading?.(true);
   try {
-    const proxied = proxyDownloadUrl(url, name);
+    // If URL is already one of our own streaming endpoints, use it directly.
+    // Otherwise route through the proxy so the server fetches the CDN URL.
+    const href = url.startsWith("/api/")
+      ? url
+      : `/api/dl/proxy?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`;
     const a = document.createElement("a");
-    a.href = proxied;
+    a.href = href;
     a.download = name;
     document.body.appendChild(a);
     a.click();
@@ -176,35 +176,18 @@ async function tryFetch(urls: string[]): Promise<any> {
 }
 
 async function fetchYouTube(url: string): Promise<DLResult> {
-  const json = await tryFetch([
-    `${CASPER}/yt-dl?url=${encodeURIComponent(url)}`,
-    `${CASPER}/yt-dl2?url=${encodeURIComponent(url)}`,
-  ]);
-
-  const title: string = json.title ?? json.info?.title ?? "";
-  const thumbnail: string = json.thumbnail ?? json.info?.thumbnail ?? "";
-  const links: DLLink[] = [];
-
-  const fmts: any[] = json.formats ?? json.qualities ?? json.videos ?? json.streams ?? [];
-  for (const f of fmts) {
-    const dlUrl: string = f.url ?? f.download_url ?? f.link ?? "";
-    if (!dlUrl) continue;
-    const isAudio = f.vcodec === "none" || f.aonly || f.type?.includes("audio") || f.mimeType?.includes("audio");
-    const q: string = f.quality ?? f.resolution ?? f.format_note ?? (f.height ? `${f.height}p` : "");
-    links.push({ label: isAudio ? `Audio · ${f.ext?.toUpperCase() ?? "M4A"}` : `${q || f.ext?.toUpperCase() || "Video"}`, url: dlUrl, quality: q, type: isAudio ? "audio" : "video" });
-  }
-
-  if (links.length === 0) {
-    const candidates = [
-      { k: json.download_url ?? json.url ?? json.direct_url, t: "video" as const, l: "Download" },
-      { k: json.audio_url ?? json.mp3_url, t: "audio" as const, l: "Audio" },
-    ];
-    for (const c of candidates) {
-      if (c.k) links.push({ label: c.l, url: c.k, type: c.t });
-    }
-  }
-  if (links.length === 0) throw new Error("No download links in response");
-  return { title, thumbnail, links };
+  const res = await fetch(`/api/dl/yt-info?url=${encodeURIComponent(url)}`);
+  const json = await res.json();
+  if (!res.ok || !json.ok) throw new Error(json.error || "Could not fetch YouTube video");
+  return {
+    title: json.title,
+    thumbnail: json.thumbnail,
+    links: json.links.map((l: any) => ({
+      label: l.label,
+      url: l.streamUrl,
+      type: l.type as "video" | "audio" | "image",
+    })),
+  };
 }
 
 async function fetchTikTok(url: string): Promise<DLResult> {
@@ -232,18 +215,14 @@ async function fetchTikTok(url: string): Promise<DLResult> {
 }
 
 async function fetchTwitter(url: string): Promise<DLResult> {
-  const json = await tryFetch([`${CASPER}/x?url=${encodeURIComponent(url)}`]);
-  const media: any[] = json.media ?? [];
-  const seen = new Set<string>();
-  const links: DLLink[] = [];
-  for (const m of media) {
-    const clean = (m.downloadUrl ?? "").replace(/'\).*$/, "").trim();
-    if (!clean || seen.has(clean)) continue;
-    seen.add(clean);
-    links.push({ label: m.quality ?? "Video", url: clean, quality: m.quality, type: "video" });
-  }
-  if (links.length === 0) throw new Error("No download links in response");
-  return { title: json.title ?? "Twitter / X Video", links };
+  const res = await fetch(`/api/dl/twitter-info?url=${encodeURIComponent(url)}`);
+  const json = await res.json();
+  if (!res.ok || !json.ok) throw new Error(json.error || "Could not fetch Twitter/X video");
+  return {
+    title: json.title,
+    thumbnail: json.thumbnail,
+    links: json.links.map((l: any) => ({ label: l.label, url: l.url, type: l.type as "video" | "audio" | "image" })),
+  };
 }
 
 async function fetchInstagram(url: string): Promise<DLResult> {
