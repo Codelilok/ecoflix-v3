@@ -468,21 +468,14 @@ export default function SocialDownloader() {
           )}
 
           {/* Action row */}
-          <div className="flex gap-2 mb-5">
+          <div className="mb-5">
             <button
               onClick={handleFetch}
               disabled={loading || !inputUrl.trim()}
-              className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-3.5 rounded-xl font-bold text-sm transition-colors active:scale-[0.98]"
+              className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-3.5 rounded-xl font-bold text-sm transition-colors active:scale-[0.98]"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               {loading ? "Fetching…" : "Get Download Links"}
-            </button>
-            <button
-              onClick={useExample}
-              title="Load example URL"
-              className="flex items-center gap-1.5 px-3 py-3.5 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-gray-400 hover:text-white text-xs font-medium transition-colors flex-shrink-0"
-            >
-              <span>Example</span>
             </button>
           </div>
 
