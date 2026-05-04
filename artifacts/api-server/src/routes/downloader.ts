@@ -114,6 +114,19 @@ router.get("/dl/yt-info", async (req, res) => {
   }
 });
 
+/* ── YouTube Search ── */
+router.get("/dl/yt-search", async (req, res) => {
+  const { q } = req.query as Record<string, string>;
+  if (!q) { res.status(400).json({ error: "Missing q" }); return; }
+  try {
+    const json = await proxyFetch(`https://apis.xcasper.space/api/search/youtube?query=${encodeURIComponent(q)}`);
+    if (!json.success) throw new Error(json.message || "Search failed");
+    res.json({ ok: true, videos: json.videos ?? [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Search failed" });
+  }
+});
+
 /* ── Twitter/X ── */
 router.get("/dl/twitter-info", async (req, res) => {
   const { url } = req.query as Record<string, string>;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
-import { Download, Loader2, AlertCircle, CheckCircle, Music, Video, Image, Link as LinkIcon, X } from "lucide-react";
+import { Download, Loader2, AlertCircle, CheckCircle, Music, Video, Image, Link as LinkIcon, X, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* ─── Platform icons ─── */
@@ -62,9 +62,19 @@ function SnapchatLogo({ size = 22 }: { size?: number }) {
     </svg>
   );
 }
+function MusicLogo({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect width="24" height="24" rx="5" fill="#10b981" />
+      <path d="M9 18V6l12-2v12" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      <circle cx="6" cy="18" r="3" fill="white"/>
+      <circle cx="18" cy="16" r="3" fill="white"/>
+    </svg>
+  );
+}
 
 /* ─── Platform config ─── */
-type Platform = "youtube" | "tiktok" | "twitter" | "instagram" | "facebook" | "snapchat";
+type Platform = "youtube" | "tiktok" | "twitter" | "instagram" | "facebook" | "snapchat" | "music";
 
 interface PlatformConfig {
   id: Platform;
@@ -81,6 +91,12 @@ const PLATFORMS: PlatformConfig[] = [
     patterns: [/youtube\.com/, /youtu\.be/],
     example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     Logo: () => <YoutubeLogo />,
+  },
+  {
+    id: "music", name: "Music", accent: "text-emerald-400",
+    patterns: [],
+    example: "",
+    Logo: () => <MusicLogo />,
   },
   {
     id: "tiktok", name: "TikTok", accent: "text-pink-400",
@@ -295,6 +311,7 @@ async function fetchMedia(platform: Platform, url: string): Promise<DLResult> {
     case "instagram": return fetchInstagram(url);
     case "facebook": return fetchFacebook(url);
     case "snapchat": return fetchSnapchat(url);
+    default: throw new Error("Unsupported platform");
   }
 }
 
@@ -338,6 +355,144 @@ function SnapGridItem({ item, title }: { item: { thumbnail?: string; url: string
         {dlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         {dlLoading ? "Saving..." : "Download"}
       </button>
+    </div>
+  );
+}
+
+/* ─── Music Search Component ─── */
+interface MusicVideo {
+  title: string;
+  videoId: string;
+  url: string;
+  thumbnail: string;
+  channel: string;
+  duration: string;
+  views: string;
+}
+
+function MusicSearch() {
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<MusicVideo[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [dlLoading, setDlLoading] = useState<{ id: string; type: string } | null>(null);
+
+  const search = async () => {
+    const q = query.trim();
+    if (!q) return;
+    setLoading(true);
+    setResults([]);
+    setError(null);
+    try {
+      const res = await fetch(`/api/dl/yt-search?q=${encodeURIComponent(q)}`);
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || "Search failed");
+      setResults(json.videos ?? []);
+    } catch (e: any) {
+      setError(e.message ?? "Search failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const download = async (video: MusicVideo, type: "video" | "audio") => {
+    setDlLoading({ id: video.videoId, type });
+    const streamUrl = `/api/dl/yt-stream?url=${encodeURIComponent(video.url)}&type=${type}`;
+    const a = document.createElement("a");
+    a.href = streamUrl;
+    a.download = video.title;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => setDlLoading(null), 2000);
+  };
+
+  return (
+    <div>
+      {/* Search input */}
+      <div className="relative mb-3">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+        <input
+          type="text"
+          placeholder="Search for a song, artist or album…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && !loading && query.trim() && search()}
+          className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-10 pr-10 py-3.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition-colors"
+        />
+        {query && (
+          <button onClick={() => { setQuery(""); setResults([]); setError(null); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      <button
+        onClick={search}
+        disabled={loading || !query.trim()}
+        className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-3.5 rounded-xl font-bold text-sm transition-colors active:scale-[0.98] mb-5"
+      >
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+        {loading ? "Searching…" : "Search"}
+      </button>
+
+      {error && (
+        <div className="flex items-start gap-3 bg-red-900/20 border border-red-500/30 rounded-xl p-4 mb-4">
+          <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-red-300 text-sm">{error}</p>
+        </div>
+      )}
+
+      {results.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {results.map((video) => {
+            const isDownloadingMp4 = dlLoading?.id === video.videoId && dlLoading.type === "video";
+            const isDownloadingMp3 = dlLoading?.id === video.videoId && dlLoading.type === "audio";
+            return (
+              <div key={video.videoId} className="bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden">
+                <div className="flex gap-3 p-3">
+                  <img
+                    src={video.thumbnail}
+                    alt={video.title}
+                    className="w-24 h-16 object-cover rounded-xl flex-shrink-0"
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-white font-semibold text-sm leading-snug line-clamp-2">{video.title}</p>
+                    <p className="text-gray-500 text-xs mt-0.5 truncate">{video.channel}</p>
+                    <p className="text-gray-600 text-xs mt-0.5">{video.duration} · {video.views}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 px-3 pb-3">
+                  <button
+                    onClick={() => download(video, "video")}
+                    disabled={dlLoading?.id === video.videoId}
+                    className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 disabled:opacity-60 text-white rounded-xl py-2.5 text-xs font-bold transition-colors active:scale-[0.97]"
+                  >
+                    {isDownloadingMp4 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Video className="h-3.5 w-3.5 text-blue-400" />}
+                    {isDownloadingMp4 ? "Saving…" : "MP4 Video"}
+                  </button>
+                  <button
+                    onClick={() => download(video, "audio")}
+                    disabled={dlLoading?.id === video.videoId}
+                    className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 border border-emerald-600 disabled:opacity-60 text-white rounded-xl py-2.5 text-xs font-bold transition-colors active:scale-[0.97]"
+                  >
+                    {isDownloadingMp3 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Music className="h-3.5 w-3.5" />}
+                    {isDownloadingMp3 ? "Saving…" : "MP3 Audio"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!loading && results.length === 0 && !error && (
+        <div className="text-center py-10 text-gray-600">
+          <Music className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Search for any song to download as MP4 or MP3</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -420,53 +575,60 @@ export default function SocialDownloader() {
             ))}
           </div>
 
-          {/* URL input */}
-          <div className="relative mb-3">
-            <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
-            <input
-              type="url"
-              placeholder={`Paste a ${platformCfg.name} link…`}
-              value={inputUrl}
-              onChange={(e) => { setInputUrl(e.target.value); setResult(null); setError(null); }}
-              onKeyDown={(e) => e.key === "Enter" && !loading && inputUrl.trim() && handleFetch()}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-10 pr-10 py-3.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500 transition-colors"
-            />
-            {inputUrl && (
-              <button onClick={clear} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors">
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Detected platform pill */}
-          {detected && detected !== activePlatform && (
-            <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800/70 border border-zinc-700 mb-3 text-xs font-medium", platformCfg.accent)}>
-              <platformCfg.Logo />
-              <span>{platformCfg.name} link detected</span>
-            </div>
-          )}
-
-          {/* Action row */}
-          <div className="mb-5">
-            <button
-              onClick={handleFetch}
-              disabled={loading || !inputUrl.trim()}
-              className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-3.5 rounded-xl font-bold text-sm transition-colors active:scale-[0.98]"
-            >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              {loading ? "Fetching…" : "Get Download Links"}
-            </button>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div className="flex items-start gap-3 bg-red-900/20 border border-red-500/30 rounded-xl p-4 mb-4">
-              <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-red-300 font-semibold text-sm">Couldn't fetch download links</p>
-                <p className="text-red-400/70 text-xs mt-0.5">{error}</p>
+          {/* Music Search — replaces the URL input section */}
+          {activePlatform === "music" ? (
+            <MusicSearch />
+          ) : (
+            <>
+              {/* URL input */}
+              <div className="relative mb-3">
+                <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+                <input
+                  type="url"
+                  placeholder={`Paste a ${platformCfg.name} link…`}
+                  value={inputUrl}
+                  onChange={(e) => { setInputUrl(e.target.value); setResult(null); setError(null); }}
+                  onKeyDown={(e) => e.key === "Enter" && !loading && inputUrl.trim() && handleFetch()}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-10 pr-10 py-3.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500 transition-colors"
+                />
+                {inputUrl && (
+                  <button onClick={clear} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
-            </div>
+
+              {/* Detected platform pill */}
+              {detected && detected !== activePlatform && (
+                <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800/70 border border-zinc-700 mb-3 text-xs font-medium", platformCfg.accent)}>
+                  <platformCfg.Logo />
+                  <span>{platformCfg.name} link detected</span>
+                </div>
+              )}
+
+              {/* Action row */}
+              <div className="mb-5">
+                <button
+                  onClick={handleFetch}
+                  disabled={loading || !inputUrl.trim()}
+                  className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-3.5 rounded-xl font-bold text-sm transition-colors active:scale-[0.98]"
+                >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  {loading ? "Fetching…" : "Get Download Links"}
+                </button>
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div className="flex items-start gap-3 bg-red-900/20 border border-red-500/30 rounded-xl p-4 mb-4">
+                  <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-red-300 font-semibold text-sm">Couldn't fetch download links</p>
+                    <p className="text-red-400/70 text-xs mt-0.5">{error}</p>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* ─── Results ─── */}
