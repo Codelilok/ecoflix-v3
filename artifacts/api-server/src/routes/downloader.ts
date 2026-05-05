@@ -82,7 +82,11 @@ router.get("/dl/yt-stream", async (req, res) => {
     const endpoint = type === "audio" ? "yt-dl3" : "ytmp6";
     const json = await proxyFetch(`${CASPER_DL}/${endpoint}?url=${encodeURIComponent(url)}`);
     if (!json.success) throw new Error(json.message || "Could not fetch YouTube media");
-    const dlUrl: string = json.url ?? json.download_url ?? "";
+    // yt-dl3 (audio): json.url = original YT URL, json.download_url = actual mp3 stream
+    // ytmp6  (video): json.url = actual mp4 stream URL
+    const dlUrl: string = type === "audio"
+      ? (json.download_url ?? json.url ?? "")
+      : (json.url ?? json.download_url ?? "");
     if (!dlUrl) throw new Error("No download URL returned");
     const title = (json.title ?? "youtube-video").slice(0, 80);
     await streamUpstream(dlUrl, title, res);
