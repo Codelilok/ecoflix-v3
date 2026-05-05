@@ -31,7 +31,7 @@ function refererFor(url: string): string {
   return "https://www.google.com/";
 }
 
-async function streamUpstream(upstreamUrl: string, filename: string, res: any) {
+async function streamUpstream(upstreamUrl: string, filename: string, res: any, forceExt?: string) {
   const upstream = await fetch(upstreamUrl, {
     headers: { "User-Agent": FETCH_HEADERS["User-Agent"], "Referer": refererFor(upstreamUrl) },
     redirect: "follow",
@@ -42,7 +42,7 @@ async function streamUpstream(upstreamUrl: string, filename: string, res: any) {
     throw new Error("Upstream returned a page instead of a media file");
   }
   const cl = upstream.headers.get("content-length");
-  const ext = ct.includes("audio") ? "mp3" : ct.includes("video") ? "mp4" : ct.includes("image") ? "jpg" : "mp4";
+  const ext = forceExt ?? (ct.includes("audio") ? "mp3" : ct.includes("video") ? "mp4" : ct.includes("image") ? "jpg" : "mp4");
   const safe = filename.replace(/[^a-z0-9_\-. ]/gi, "_");
   res.setHeader("Content-Type", ct);
   res.setHeader("Content-Disposition", `attachment; filename="${safe}.${ext}"`);
@@ -89,7 +89,7 @@ router.get("/dl/yt-stream", async (req, res) => {
       : (json.url ?? json.download_url ?? "");
     if (!dlUrl) throw new Error("No download URL returned");
     const title = (json.title ?? "youtube-video").slice(0, 80);
-    await streamUpstream(dlUrl, title, res);
+    await streamUpstream(dlUrl, title, res, type === "audio" ? "mp3" : "mp4");
   } catch (err: any) {
     if (!res.headersSent) res.status(500).json({ error: err.message || "YouTube stream failed" });
   }
