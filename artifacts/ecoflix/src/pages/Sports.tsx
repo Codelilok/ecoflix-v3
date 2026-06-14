@@ -69,16 +69,6 @@ async function fetchOldUpcoming(): Promise<UpcomingMatch[]> {
   }));
   return results.flatMap(r => r.status === "fulfilled" ? r.value : []);
 }
-function calcPeriod(startTime: number): string {
-  if (!startTime) return "Live";
-  const elapsed = Math.floor((Date.now() - startTime) / 60000);
-  if (elapsed < 0) return "Live";
-  if (elapsed <= 45) return `${elapsed}' · 1st Half`;
-  if (elapsed <= 60) return "Half Time";
-  if (elapsed <= 105) return `${Math.min(elapsed - 15, 90)}' · 2nd Half`;
-  return "Live";
-}
-
 /* ─── New/Backup API ─── */
 async function fetchNewSportsData(): Promise<SportsData> {
   const res = await fetch("https://movieapi.xcasper.space/api/live");
