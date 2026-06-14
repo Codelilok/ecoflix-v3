@@ -69,6 +69,16 @@ async function fetchOldUpcoming(): Promise<UpcomingMatch[]> {
   }));
   return results.flatMap(r => r.status === "fulfilled" ? r.value : []);
 }
+function calcPeriod(startTime: number): string {
+  if (!startTime) return "Live";
+  const elapsed = Math.floor((Date.now() - startTime) / 60000);
+  if (elapsed < 0) return "Live";
+  if (elapsed <= 45) return `${elapsed}' · 1st Half`;
+  if (elapsed <= 60) return "Half Time";
+  if (elapsed <= 105) return `${Math.min(elapsed - 15, 90)}' · 2nd Half`;
+  return "Live";
+}
+
 /* ─── New/Backup API ─── */
 async function fetchNewSportsData(): Promise<SportsData> {
   const res = await fetch("https://movieapi.xcasper.space/api/live");
@@ -86,7 +96,7 @@ async function fetchNewSportsData(): Promise<SportsData> {
     const avatar1 = m.team1?.avatar || "";
     const avatar2 = m.team2?.avatar || "";
     if (m.status === "MatchIng") {
-      live.push({ type: "live", id: m.id, homeTeam: m.team1?.name || "Home", awayTeam: m.team2?.name || "Away", homeScore: m.team1?.score || "0", awayScore: m.team2?.score || "0", date, period: m.timeDesc || "Live", league: m.league || "", avatar1, avatar2, playPath: m.playPath || "", sportType: m.type || "" });
+      live.push({ type: "live", id: m.id, homeTeam: m.team1?.name || "Home", awayTeam: m.team2?.name || "Away", homeScore: m.team1?.score || "0", awayScore: m.team2?.score || "0", date, period: m.timeDesc || calcPeriod(m.startTime), league: m.league || "", avatar1, avatar2, playPath: m.playPath || "", sportType: m.type || "" });
     } else if (m.status === "MatchEnded") {
       finished.push({ type: "finished", id: m.id, homeTeam: m.team1?.name || "Home", awayTeam: m.team2?.name || "Away", homeScore: m.team1?.score || "0", awayScore: m.team2?.score || "0", date, league: m.league || "", avatar1, avatar2 });
     } else {
