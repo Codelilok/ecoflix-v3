@@ -26,16 +26,13 @@ interface LiveMatch { type: "live"; id: string; homeTeam: string; awayTeam: stri
 interface FinishedMatch { type: "finished"; id: string; homeTeam: string; awayTeam: string; homeScore: string; awayScore: string; date: string; league: string; avatar1?: string; avatar2?: string; }
 interface UpcomingMatch { type: "upcoming"; id: string; homeTeam: string; awayTeam: string; date: string; league: string; avatar1?: string; avatar2?: string; }
 type AnyMatch = LiveMatch | FinishedMatch | UpcomingMatch;
-interface StandingRow { position: number; team: string; played: number; won: number; draw: number; lost: number; goalDifference: number; points: number; }
-interface LeagueStandings { competition: string; standings: StandingRow[]; }
 interface NewsItem { id: string; title: string; cover: string; }
 interface HighlightItem { id: string; title: string; path: string; cover: { url: string } | null; duration: string; }
-interface SportsData { live: LiveMatch[]; finished: FinishedMatch[]; upcoming: UpcomingMatch[]; standings: LeagueStandings[]; news: NewsItem[]; highlights: HighlightItem[]; }
+interface SportsData { live: LiveMatch[]; finished: FinishedMatch[]; upcoming: UpcomingMatch[]; news: NewsItem[]; highlights: HighlightItem[]; }
 
 /* ─── Old API (primary) ─── */
 const OLD_FINISHED = ["https://apiskeith.vercel.app/epl/matches","https://apiskeith.vercel.app/bundesliga/matches","https://apiskeith.vercel.app/laliga/matches","https://apiskeith.vercel.app/euros/matches","https://apiskeith.vercel.app/ucl/matches","https://apiskeith.vercel.app/seriea/matches","https://apiskeith.vercel.app/ligue1/matches"];
 const OLD_UPCOMING = ["https://apiskeith.vercel.app/epl/upcomingmatches","https://apiskeith.vercel.app/bundesliga/upcomingmatches","https://apiskeith.vercel.app/euros/upcomingmatches","https://apiskeith.vercel.app/laliga/upcomingmatches","https://apiskeith.vercel.app/fifa/upcomingmatches","https://apiskeith.vercel.app/ucl/upcomingmatches","https://apiskeith.vercel.app/seriea/upcomingmatches","https://apiskeith.vercel.app/ligue1/upcomingmatches"];
-const OLD_STANDINGS = ["https://apiskeith.vercel.app/epl/standings","https://apiskeith.vercel.app/bundesliga/standings","https://apiskeith.vercel.app/laliga/standings","https://apiskeith.vercel.app/ligue1/standings","https://apiskeith.vercel.app/seriea/standings","https://apiskeith.vercel.app/ucl/standings"];
 
 async function fetchOldLive(): Promise<LiveMatch[]> {
   const res = await fetch("https://apiskeith.vercel.app/livescore");
@@ -72,18 +69,8 @@ async function fetchOldUpcoming(): Promise<UpcomingMatch[]> {
   }));
   return results.flatMap(r => r.status === "fulfilled" ? r.value : []);
 }
-async function fetchOldStandings(): Promise<LeagueStandings[]> {
-  const results = await Promise.allSettled(OLD_STANDINGS.map(async (url) => {
-    const res = await fetch(url);
-    const json = await res.json();
-    if (!json?.status || !json?.result?.standings) return null;
-    return { competition: json.result.competition || url.split("/").slice(-2, -1)[0], standings: json.result.standings } as LeagueStandings;
-  }));
-  return results.flatMap(r => (r.status === "fulfilled" && r.value) ? [r.value] : []);
-}
-
 /* ─── New/Backup API ─── */
-async function fetchNewSportsData(): Promise<Omit<SportsData, "standings">> {
+async function fetchNewSportsData(): Promise<SportsData> {
   const res = await fetch("https://movieapi.xcasper.space/api/live");
   const json = await res.json();
   const matchList: any[] = json?.data?.matchList || [];
@@ -116,25 +103,22 @@ async function fetchNewSportsData(): Promise<Omit<SportsData, "standings">> {
 
 /* ─── Combined fetch (primary + backup) ─── */
 async function fetchSportsData(): Promise<SportsData> {
-  const [newResult, oldLiveResult, oldFinishedResult, oldUpcomingResult, oldStandingsResult] = await Promise.allSettled([
+  const [newResult, oldLiveResult, oldFinishedResult, oldUpcomingResult] = await Promise.allSettled([
     fetchNewSportsData(),
     fetchOldLive(),
     fetchOldFinished(),
     fetchOldUpcoming(),
-    fetchOldStandings(),
   ]);
 
   const newData = newResult.status === "fulfilled" ? newResult.value : { live: [], finished: [], upcoming: [], news: [], highlights: [] };
   const oldLive = oldLiveResult.status === "fulfilled" ? oldLiveResult.value : [];
   const oldFinished = oldFinishedResult.status === "fulfilled" ? oldFinishedResult.value : [];
   const oldUpcoming = oldUpcomingResult.status === "fulfilled" ? oldUpcomingResult.value : [];
-  const oldStandings = oldStandingsResult.status === "fulfilled" ? oldStandingsResult.value : [];
 
   return {
     live: oldLive.length > 0 ? oldLive : newData.live,
     finished: oldFinished.length > 0 ? oldFinished : newData.finished,
     upcoming: oldUpcoming.length > 0 ? oldUpcoming : newData.upcoming,
-    standings: oldStandings,
     news: newData.news,
     highlights: newData.highlights,
   };
@@ -291,64 +275,6 @@ function MatchCard({ match }: { match: AnyMatch }) {
   );
 }
 
-function StandingsTable({ league }: { league: LeagueStandings }) {
-  const [open, setOpen] = useState(true);
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden mb-3">
-      <button onClick={() => setOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-zinc-800/60 transition-colors">
-        <div className="flex items-center gap-2">
-          <Trophy className="h-4 w-4 text-yellow-500" />
-          <span className="text-white font-bold text-sm">{league.competition}</span>
-          <span className="text-gray-500 text-xs">{league.standings.length} teams</span>
-        </div>
-        <ChevronDown className={cn("h-4 w-4 text-gray-400 transition-transform duration-200", open ? "rotate-180" : "")} />
-      </button>
-      {open && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-zinc-800/60 text-gray-400">
-                <th className="text-left px-3 py-2 font-semibold w-8">#</th>
-                <th className="text-left px-3 py-2 font-semibold">Team</th>
-                <th className="text-center px-2 py-2 font-semibold">P</th>
-                <th className="text-center px-2 py-2 font-semibold">W</th>
-                <th className="text-center px-2 py-2 font-semibold">D</th>
-                <th className="text-center px-2 py-2 font-semibold">L</th>
-                <th className="text-center px-2 py-2 font-semibold">GD</th>
-                <th className="text-center px-2 py-2 font-semibold text-yellow-400">Pts</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/50">
-              {league.standings.map((row, i) => (
-                <tr key={i} className={cn("transition-colors hover:bg-zinc-800/40", i < 4 ? "border-l-2 border-blue-500" : i < 6 ? "border-l-2 border-orange-500" : i >= league.standings.length - 3 ? "border-l-2 border-red-600" : "border-l-2 border-transparent")}>
-                  <td className="px-3 py-2.5 text-gray-400 font-bold">{row.position}</td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-white font-black text-[9px] flex-shrink-0", teamColor(row.team))}>{getInitials(row.team).slice(0, 2)}</div>
-                      <span className="text-gray-200 font-medium whitespace-nowrap">{row.team}</span>
-                    </div>
-                  </td>
-                  <td className="px-2 py-2.5 text-center text-gray-400">{row.played}</td>
-                  <td className="px-2 py-2.5 text-center text-green-400">{row.won}</td>
-                  <td className="px-2 py-2.5 text-center text-gray-400">{row.draw}</td>
-                  <td className="px-2 py-2.5 text-center text-red-400">{row.lost}</td>
-                  <td className="px-2 py-2.5 text-center text-gray-300">{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
-                  <td className="px-2 py-2.5 text-center text-yellow-400 font-black">{row.points}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="flex items-center gap-4 px-3 py-2 border-t border-zinc-800/50">
-            <div className="flex items-center gap-1.5"><div className="w-2 h-3 bg-blue-500 rounded-sm" /><span className="text-gray-500 text-[10px]">Champions League</span></div>
-            <div className="flex items-center gap-1.5"><div className="w-2 h-3 bg-orange-500 rounded-sm" /><span className="text-gray-500 text-[10px]">Europa League</span></div>
-            <div className="flex items-center gap-1.5"><div className="w-2 h-3 bg-red-600 rounded-sm" /><span className="text-gray-500 text-[10px]">Relegation</span></div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function SectionLoader() {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -367,13 +293,12 @@ function EmptyState({ message }: { message: string }) {
 }
 
 /* ─── Main Page ─── */
-type Tab = "live" | "finished" | "upcoming" | "all" | "standings" | "news";
+type Tab = "live" | "finished" | "upcoming" | "all" | "news";
 const TABS: { id: Tab; label: string }[] = [
   { id: "live", label: "Live" },
   { id: "finished", label: "Finished" },
   { id: "upcoming", label: "Upcoming" },
   { id: "all", label: "All Matches" },
-  { id: "standings", label: "Standings" },
   { id: "news", label: "News & Highlights" },
 ];
 
@@ -393,7 +318,6 @@ export default function Sports() {
   const liveMatches = data?.live ?? [];
   const finishedMatches = data?.finished ?? [];
   const upcomingMatches = data?.upcoming ?? [];
-  const allStandings = data?.standings ?? [];
   const allMatches: AnyMatch[] = useMemo(() => [...liveMatches, ...finishedMatches, ...upcomingMatches], [liveMatches, finishedMatches, upcomingMatches]);
 
   const q = search.trim().toLowerCase();
@@ -401,24 +325,16 @@ export default function Sports() {
     if (!q) return true;
     return m.homeTeam.toLowerCase().includes(q) || m.awayTeam.toLowerCase().includes(q) || (m.league || "").toLowerCase().includes(q);
   }
-  function standingSearch(l: LeagueStandings): boolean {
-    if (!q) return true;
-    return l.competition.toLowerCase().includes(q) || l.standings.some(r => r.team.toLowerCase().includes(q));
-  }
-
   const displayedMatches = useMemo((): AnyMatch[] => {
     const base = activeTab === "live" ? liveMatches : activeTab === "finished" ? finishedMatches : activeTab === "upcoming" ? upcomingMatches : allMatches;
     return base.filter(matchesSearch);
   }, [activeTab, liveMatches, finishedMatches, upcomingMatches, allMatches, q]);
-
-  const displayedStandings = useMemo(() => allStandings.filter(standingSearch), [allStandings, q]);
 
   const tabCount = (id: Tab) => {
     if (id === "live") return liveMatches.length;
     if (id === "finished") return finishedMatches.length;
     if (id === "upcoming") return upcomingMatches.length;
     if (id === "all") return allMatches.length;
-    if (id === "standings") return allStandings.length;
     return (data?.news.length ?? 0) + (data?.highlights.length ?? 0);
   };
 
@@ -451,7 +367,6 @@ export default function Sports() {
               return (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn("flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all min-w-fit", isActive ? "bg-red-600 text-white shadow" : "text-gray-400 hover:text-white hover:bg-zinc-800")}>
                   {tab.id === "live" && <span className={cn("relative flex h-2 w-2 flex-shrink-0", !isActive && "opacity-60")}><span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", isActive ? "bg-white" : "bg-red-500")} /><span className={cn("relative inline-flex rounded-full h-2 w-2", isActive ? "bg-white" : "bg-red-500")} /></span>}
-                  {tab.id === "standings" && <Trophy className="h-3.5 w-3.5 flex-shrink-0" />}
                   {tab.id === "news" && <Newspaper className="h-3.5 w-3.5 flex-shrink-0" />}
                   {tab.label}
                   {count > 0 && <span className={cn("text-xs px-1.5 py-0.5 rounded-md font-bold", isActive ? "bg-white/20" : "bg-zinc-700 text-gray-300")}>{count}</span>}
@@ -470,13 +385,6 @@ export default function Sports() {
                 {displayedMatches.map(m => <MatchCard key={m.id} match={m} />)}
               </div>
             )
-          )}
-
-          {/* Standings tab */}
-          {activeTab === "standings" && (
-            isLoading ? <SectionLoader /> :
-            displayedStandings.length === 0 ? <EmptyState message={q ? `No standings found for "${search}"` : "Standings not available right now"} /> :
-            <div>{displayedStandings.map((l, i) => <StandingsTable key={i} league={l} />)}</div>
           )}
 
           {/* News & Highlights tab */}
